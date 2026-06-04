@@ -22,7 +22,7 @@ TXTeditor is not affiliated with, endorsed by, or connected to Blizzard Entertai
 
 ## Lint Profiles
 
-TXTeditor includes RotW and 2.4 lint profiles. The rules are based on d2rlint behavior and are integrated into TXTeditor's live Problems panel.
+TXTeditor includes RotW and 2.4 lint profiles. These rules are based on the behavior of [d2rlint](https://github.com/eezstreet/d2rlint), the original D2R linting tool made by eezstreet, and are integrated into TXTeditor's live Problems panel.
 
 The RotW-oriented lint behavior has been checked against the project's current d2rlint-compatible fixture/oracle workflow. Other data sets, mod variants, or future rule changes may still expose bugs or differences.
 
@@ -82,7 +82,7 @@ AFJSheet: I used AFJSheet for a long time and learned a lot from its workflow as
 
 D2ExcelPlus: I also used D2ExcelPlus and found it to be an excellent and very stable tool. I personally ported and used it in my own workflow, and that experience was one of the reasons I wanted to make a small editor of my own with OpenAI Codex. Some context-menu and editing UX ideas in TXTeditor were inspired by the experience of using tools such as D2ExcelPlus and AFJSheet.
 
-d2rlint by eezstreet: TXTeditor's D2R lint rules are based on the behavior of d2rlint. Portions of the lint logic have been ported or adapted for TXTeditor's live editor diagnostics.
+[d2rlint](https://github.com/eezstreet/d2rlint) by eezstreet: d2rlint is the original D2R linting tool made by eezstreet. TXTeditor's D2R lint behavior is based on d2rlint's behavior, and portions of the lint logic have been ported or adapted for TXTeditor's live editor diagnostics.
 
 OpenAI Codex: Most implementation work was done through collaboration with OpenAI Codex.
 
@@ -90,6 +90,6 @@ OpenAI Codex: Most implementation work was done through collaboration with OpenA
 
 TXTeditor is distributed under the GNU General Public License v3.0 or later (GPL-3.0-or-later). See [LICENSE](LICENSE).
 
-This project uses and adapts lint behavior from d2rlint by eezstreet, which is licensed under GNU GPLv3. The GPL license is included to respect those terms and to keep TXTeditor's source available under compatible open-source terms.
+This project uses and adapts lint behavior from [d2rlint](https://github.com/eezstreet/d2rlint), the original D2R linting tool made by eezstreet and licensed under GNU GPLv3. The GPL license is included to respect those terms and to keep TXTeditor's source available under compatible open-source terms.
 
 TXTeditor is also inspired by the workflows of AFJSheet and D2ExcelPlus. Those projects are credited in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
