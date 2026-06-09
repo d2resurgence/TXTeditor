@@ -88,6 +88,9 @@ export class CanvasGrid {
     this._hoveredCell = null;
     this._lastTooltipX = 0;
     this._lastTooltipY = 0;
+    this._hoverDebounceTimer = null;
+    this._pendingHoverRow = -1;
+    this._pendingHoverCol = -1;
     this.gridFontFamily = "Consolas, 'Cascadia Mono', monospace";
     this.deviceScale = window.devicePixelRatio || 1;
     this.dragging = false;
@@ -773,7 +776,19 @@ export class CanvasGrid {
     this._lastTooltipX = event.clientX;
     this._lastTooltipY = event.clientY;
     this._renderTooltip(hit.row, hit.column, event.clientX, event.clientY);
-    this.onHoverRequest?.(hit.row, hit.column);
+    this._scheduleHoverRequest(hit.row, hit.column);
+  }
+
+  _scheduleHoverRequest(row, col) {
+    this._pendingHoverRow = row;
+    this._pendingHoverCol = col;
+    if (this._hoverDebounceTimer !== null) clearTimeout(this._hoverDebounceTimer);
+    this._hoverDebounceTimer = setTimeout(() => {
+      this._hoverDebounceTimer = null;
+      if (this._hoveredCell?.row === this._pendingHoverRow && this._hoveredCell?.col === this._pendingHoverCol) {
+        this.onHoverRequest?.(this._pendingHoverRow, this._pendingHoverCol);
+      }
+    }, 150);
   }
 
   _renderTooltip(row, col, clientX, clientY) {

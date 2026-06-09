@@ -114,6 +114,7 @@ const collapsedProblemFiles = new Set();
 const collapsedFileGroups = new Set();
 const lspHoverCache = new Map();
 const lspHoverPending = new Set();
+let lspHoverCurrentKey = null;
 document.documentElement.dataset.theme = savedTheme;
 document.documentElement.style.setProperty("--grid-font", savedGridFont);
 document.documentElement.style.setProperty("--sidebar-width", `${savedSidebarWidth}px`);
@@ -1028,6 +1029,7 @@ function fileNameFromUri(uri) {
 async function lspStartWorkspace(workspacePath) {
   lspHoverCache.clear();
   lspHoverPending.clear();
+  lspHoverCurrentKey = null;
   state.lspLogs = [];
   if (els.logList) els.logList.innerHTML = "";
   state.lint.status = "Connecting to linter...";
@@ -1127,23 +1129,25 @@ async function requestLspHover(row, col) {
   const uri = docToUri(doc);
   if (!uri) return;
   const key = `${uri}:${row}:${col}`;
-  if (lspHoverCache.has(key) || lspHoverPending.has(key)) {
+  lspHoverCurrentKey = key;
+  if (lspHoverCache.has(key)) {
     const cached = lspHoverCache.get(key);
     if (cached != null) grid.setLspHover(row, col, cached);
     return;
   }
+  if (lspHoverPending.has(key)) return;
   lspHoverPending.add(key);
   try {
     const charOffset = computeCharOffset(doc, row, col);
     let text = await lspHover(uri, row, charOffset);
-    if (text) {
+    lspHoverCache.set(key, text || null);
+    if (text && lspHoverCurrentKey === key) {
       const cellValue = doc.getCell(row, col);
       if (cellValue && text.startsWith(cellValue)) {
         text = text.slice(cellValue.length).replace(/^\s*\n?/, "");
       }
+      grid.setLspHover(row, col, text);
     }
-    lspHoverCache.set(key, text || null);
-    if (text) grid.setLspHover(row, col, text);
   } catch {
     lspHoverCache.set(key, null);
   } finally {
@@ -1823,7 +1827,7 @@ function problemBadgeForPath(path) {
 }
 
 function lintNotificationsVisible() {
-  return state.problemsVisible && state.lint.settings.enabled && state.lint.diagnostics.length > 0;
+  return state.problemsVisible && state.lint.enabled && state.lint.diagnostics.length > 0;
 }
 
 function lintNotificationCount() {
