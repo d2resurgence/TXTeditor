@@ -26,6 +26,8 @@ TXTeditor includes RotW and 2.4 lint profiles. These rules are based on the beha
 
 The RotW-oriented lint behavior has been checked against the project's current d2rlint-compatible fixture/oracle workflow. Other data sets, mod variants, or future rule changes may still expose bugs or differences.
 
+Version 0.4 integrates [vector-lsp](https://github.com/eezstreet/vector-lsp) created by eezstreet, which will replace the existing linting system.
+
 ## Build
 
 Requirements:
