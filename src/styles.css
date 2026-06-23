@@ -704,6 +704,35 @@ button.active {
   max-width: 140px;
 }
 
+.problems-panel[data-dock-edge="left"] .problem-item,
+.problems-panel[data-dock-edge="right"] .problem-item {
+  display: grid;
+  grid-template-columns: minmax(50px, max-content) minmax(0, 1fr);
+  align-items: start;
+  column-gap: 8px;
+  row-gap: 2px;
+  white-space: normal !important;
+}
+
+.problems-panel[data-dock-edge="left"] .problem-message,
+.problems-panel[data-dock-edge="right"] .problem-message {
+  min-width: 0;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.problems-panel[data-dock-edge="left"] .problem-rule,
+.problems-panel[data-dock-edge="right"] .problem-rule {
+  grid-column: 2;
+  max-width: none;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .empty-problems {
   color: var(--muted);
   font-size: 12px;

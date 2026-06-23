@@ -1430,6 +1430,9 @@ test("dock drop UI is removed and docked controls keep a single-row Problems hea
   assert.match(css, /\.problems-panel\.problems-panel-narrow \.problems-header\s*\{[\s\S]*grid-template-rows:\s*38px 38px;[\s\S]*height:\s*76px;/);
   assert.match(css, /\.problems-panel\.problems-panel-narrow \.lint-controls\s*\{[\s\S]*height:\s*38px;[\s\S]*overflow-x:\s*auto;[\s\S]*scrollbar-width:\s*none;/);
   assert.match(css, /\.lint-controls\s*\{[\s\S]*flex:\s*0 0 auto;/);
+  assert.match(css, /\.problem-item\s*\{[\s\S]*white-space:\s*nowrap !important;/);
+  assert.match(css, /\.problems-panel\[data-dock-edge="left"\] \.problem-item,\s*\.problems-panel\[data-dock-edge="right"\] \.problem-item\s*\{[\s\S]*white-space:\s*normal !important;/);
+  assert.match(css, /\.problems-panel\[data-dock-edge="left"\] \.problem-message,\s*\.problems-panel\[data-dock-edge="right"\] \.problem-message\s*\{[\s\S]*overflow-wrap:\s*anywhere;[\s\S]*white-space:\s*normal;/);
   assert.match(source, /function syncProblemsHeaderLayout\(\)/);
   assert.match(source, /header\.scrollWidth > header\.clientWidth \+ 2/);
   assert.doesNotMatch(css, /\.problems-panel\[data-dock-edge="left"\] \.problems-header/);
