@@ -45,6 +45,7 @@ import {
   lspUpdateFileIncremental,
   openFilesNative,
   openNativePaths,
+  openNativePathsBulk,
   openWorkspaceNative,
   pickFilePath,
   pickFolderPath,
@@ -56,10 +57,11 @@ import {
   createDefaultLintSettings,
   diagnosticsForDocument,
   groupDiagnosticsByCell,
+  buildWorkspaceIndex,
   lintProfileOptions,
   lintRuleGroupsForProfile,
   normalizeLintSettings,
-  runLint
+  runLintWithWorkspaceIndex
 } from "./core/lint-engine.js";
 import {
   cancelVectorHoverSample,
@@ -193,6 +195,7 @@ const state = {
     legacy: {
       settings: savedLegacyLintSettings,
       timer: 0,
+      pendingRun: null,
       version: 0,
       running: false,
       status: "",
@@ -202,7 +205,13 @@ const state = {
       workspaceLoad: {
         status: "not-started",
         files: [],
-        error: ""
+        error: "",
+        signature: ""
+      },
+      workspaceIndexCache: {
+        signature: "",
+        profile: "",
+        index: null
       }
     }
   },
@@ -369,6 +378,10 @@ function perfNow() {
   return typeof performance === "undefined" ? 0 : performance.now();
 }
 
+function elapsedMs(started) {
+  return Math.round((perfNow() - started) * 100) / 100;
+}
+
 function recordUiPerf(name, started, details = {}) {
   if (typeof performance === "undefined") return;
   uiPerfSamples.push({
@@ -427,10 +440,11 @@ function execute(command, changedRows = null) {
   const started = perfNow();
   const doc = activeDoc();
   command.redo(activeDoc());
+  markLegacyLintDocChanged(doc);
   activeUndo().push(command);
   grid.layout();
   if (isVectorLintEngine()) lspUpdateDoc(doc, changedRows).catch(() => {});
-  else scheduleLegacyLintForChange(doc);
+  else scheduleLegacyLintForEdit(doc);
   recordUiPerf("row-command", started, { changedRows: changedRows?.length ?? 0 });
   renderChrome();
 }
@@ -592,6 +606,7 @@ async function addDocument(doc) {
   }
   doc.undo = new UndoManager();
   doc.zoom = 1;
+  doc.legacyLintVersion = doc.legacyLintVersion ?? 0;
   state.docs.push(doc);
   state.active = state.docs.length - 1;
   applyFreezeToDoc(doc);
@@ -607,7 +622,7 @@ async function addDocument(doc) {
     lspOpenDoc(doc).catch(() => {});
     scheduleHoverPrewarm("document-opened");
   } else {
-    scheduleLegacyLintForChange(doc);
+    scheduleLegacyLintForOpen("file-opened");
   }
 }
 
@@ -734,17 +749,23 @@ async function loadFixture(size) {
 }
 
 function undo() {
-  if (activeUndo().undo(activeDoc())) {
+  const doc = activeDoc();
+  if (activeUndo().undo(doc)) {
+    markLegacyLintDocChanged(doc);
     grid.layout();
-    lspUpdateDoc(activeDoc()).catch(() => {});
+    if (isVectorLintEngine()) lspUpdateDoc(doc).catch(() => {});
+    else scheduleLegacyLintForEdit(doc);
     renderChrome();
   }
 }
 
 function redo() {
-  if (activeUndo().redo(activeDoc())) {
+  const doc = activeDoc();
+  if (activeUndo().redo(doc)) {
+    markLegacyLintDocChanged(doc);
     grid.layout();
-    lspUpdateDoc(activeDoc()).catch(() => {});
+    if (isVectorLintEngine()) lspUpdateDoc(doc).catch(() => {});
+    else scheduleLegacyLintForEdit(doc);
     renderChrome();
   }
 }
@@ -1322,15 +1343,35 @@ function wirePaneResizers() {
 
 // ── LSP integration ────────────────────────────────────────────────────────
 
-function scheduleLegacyLintForChange(doc) {
-  if (!legacyLintDisplayActive()) return;
-  scheduleLegacyLintFull(docHasDiagnostics(doc) ? "diagnostic-file-edited" : "file-edited", 360);
+function markLegacyLintDocChanged(doc) {
+  if (!doc) return;
+  doc.legacyLintVersion = (doc.legacyLintVersion ?? 0) + 1;
 }
 
-function scheduleLegacyLintFull(reason = "change", delay = 420) {
+function scheduleLegacyLintForOpen(reason = "file-opened") {
+  scheduleLegacyLintFull(reason, 0);
+}
+
+function scheduleLegacyLintForEdit(doc) {
+  if (!legacyLintDisplayActive()) return;
+  const hasDiagnostics = docHasDiagnostics(doc);
+  const delay = hasDiagnostics ? 120 : 180;
+  scheduleLegacyLintFull(hasDiagnostics ? "diagnostic-file-edited" : "file-edited", delay);
+}
+
+function scheduleLegacyLintFull(reason = "change", delay = 0) {
   if (!legacyLintDisplayActive()) return;
   clearTimeout(state.lint.legacy.timer);
   const version = ++state.lint.legacy.version;
+  const scheduledAt = perfNow();
+  state.lint.legacy.pendingRun = { version, reason, delay, scheduledAt };
+  recordLintEngineEvent("legacy-lint-scheduled", {
+    reason,
+    version,
+    delayMs: delay,
+    scheduledAt,
+    profile: state.lint.legacy.settings.profile
+  });
   state.lint.legacy.timer = setTimeout(() => runLegacyLintNow(reason, version), delay);
 }
 
@@ -1338,36 +1379,107 @@ async function runLegacyLintNow(reason = "lint", version = ++state.lint.legacy.v
   clearTimeout(state.lint.legacy.timer);
   state.lint.legacy.timer = 0;
   if (!legacyLintDisplayActive() || version !== state.lint.legacy.version) return;
+  const pendingRun = state.lint.legacy.pendingRun?.version === version
+    ? state.lint.legacy.pendingRun
+    : { reason, version, delay: 0, scheduledAt: perfNow() };
+  const startedAt = perfNow();
+  const timings = {
+    reason,
+    version,
+    profile: state.lint.legacy.settings.profile,
+    scheduledAt: pendingRun.scheduledAt,
+    startedAt,
+    queueDelayMs: elapsedMs(pendingRun.scheduledAt),
+    scheduledDelayMs: pendingRun.delay,
+    workspaceFileCount: 0,
+    workspaceReadMs: 0,
+    workspaceParseMs: 0,
+    workspaceIndexMs: 0,
+    runLintMs: 0,
+    diagnosticsApplyMs: 0,
+    renderMs: 0,
+    totalMs: 0,
+    diagnosticCount: 0,
+    usedWorkspaceCache: false,
+    usedWorkspaceIndexCache: false,
+    bulkRead: false
+  };
+  let published = false;
   state.lint.legacy.running = true;
   state.lint.legacy.status = state.workspace?.files?.length ? "Indexing workspace..." : `Linting ${state.lint.legacy.settings.profile}...`;
-  recordLintEngineEvent("legacy-lint-start", { reason, version, profile: state.lint.legacy.settings.profile });
-  renderChrome();
+  recordLintEngineEvent("legacy-lint-start", timings);
+  timings.renderMs += measureRenderChrome();
   try {
-    await ensureLegacyWorkspaceIndexed(version);
+    const workspaceStats = await ensureLegacyWorkspaceIndexed(version);
+    timings.renderMs += workspaceStats.workspaceRenderMs ?? 0;
+    delete workspaceStats.workspaceRenderMs;
+    Object.assign(timings, workspaceStats);
     if (!legacyLintDisplayActive() || version !== state.lint.legacy.version) return;
     state.lint.legacy.status = `Linting ${state.lint.legacy.settings.profile}...`;
-    renderChrome();
+    timings.renderMs += measureRenderChrome();
     await yieldToUi();
-    const diagnostics = runLint(activeLegacyLintDocuments(), state.lint.legacy.settings);
+    const docs = activeLegacyLintDocuments();
+    const indexResult = legacyLintWorkspaceIndexFor(docs, state.lint.legacy.settings.profile);
+    timings.workspaceIndexMs = indexResult.ms;
+    timings.usedWorkspaceIndexCache = indexResult.cached;
+    const runStarted = perfNow();
+    const diagnostics = runLintWithWorkspaceIndex(indexResult.index, state.lint.legacy.settings);
+    timings.runLintMs = elapsedMs(runStarted);
     if (!legacyLintDisplayActive() || version !== state.lint.legacy.version) {
       recordLintEngineEvent("legacy-lint-ignored", { reason, version, diagnostics: diagnostics.length });
       return;
     }
+    const applyStarted = perfNow();
     setLintDiagnostics(diagnostics);
+    timings.diagnosticsApplyMs = elapsedMs(applyStarted);
+    timings.diagnosticCount = diagnostics.length;
     state.lint.legacy.lastRunAt = Date.now();
-    recordLintEngineEvent("legacy-lint-finish", { reason, version, diagnostics: diagnostics.length, profile: state.lint.legacy.settings.profile });
-    updateGridDiagnostics();
+    published = true;
   } finally {
     if (version === state.lint.legacy.version) {
       state.lint.legacy.running = false;
       state.lint.legacy.status = "";
-      renderChrome();
+      timings.renderMs += measureRenderChrome();
+      timings.totalMs = elapsedMs(timings.scheduledAt);
+      if (published) recordLintEngineEvent("legacy-lint-finish", timings);
     }
   }
 }
 
+function measureRenderChrome() {
+  const started = perfNow();
+  renderChrome();
+  return elapsedMs(started);
+}
+
 function activeLegacyLintDocuments() {
   return [...state.docs, ...state.lint.legacy.workspaceDocs];
+}
+
+function legacyLintWorkspaceIndexFor(docs, profile) {
+  const signature = legacyLintIndexSignature(docs, profile);
+  const cache = state.lint.legacy.workspaceIndexCache;
+  if (cache.index && cache.signature === signature && cache.profile === profile) {
+    return { index: cache.index, ms: 0, cached: true };
+  }
+  const started = perfNow();
+  const index = buildWorkspaceIndex(docs, profile);
+  const ms = elapsedMs(started);
+  state.lint.legacy.workspaceIndexCache = { signature, profile, index };
+  return { index, ms, cached: false };
+}
+
+function legacyLintIndexSignature(docs, profile) {
+  return [
+    profile,
+    state.lint.legacy.workspaceLoad.signature ?? "",
+    docs.map((doc) => [
+      lintDocKey(doc),
+      doc.legacyLintVersion ?? 0,
+      doc.rowCount ?? 0,
+      doc.columnCount ?? 0
+    ].join(":")).join("\u001f")
+  ].join("\u001e");
 }
 
 function currentLegacyProfileRules() {
@@ -1377,6 +1489,7 @@ function currentLegacyProfileRules() {
 function cancelLegacyLintJobs({ clearDiagnostics = false } = {}) {
   clearTimeout(state.lint.legacy.timer);
   state.lint.legacy.timer = 0;
+  state.lint.legacy.pendingRun = null;
   state.lint.legacy.version += 1;
   state.lint.legacy.running = false;
   state.lint.legacy.status = "";
@@ -1389,50 +1502,87 @@ function cancelLegacyLintJobs({ clearDiagnostics = false } = {}) {
 
 function resetLegacyWorkspaceIndex() {
   state.lint.legacy.workspaceDocs = [];
-  state.lint.legacy.workspaceLoad = { status: "not-started", files: [], error: "" };
+  state.lint.legacy.workspaceLoad = { status: "not-started", files: [], error: "", signature: "" };
+  state.lint.legacy.workspaceIndexCache = { signature: "", profile: "", index: null };
 }
 
 async function ensureLegacyWorkspaceIndexed(version) {
-  if (!state.workspace?.files?.length) return;
-  if (state.lint.legacy.workspaceLoad.status === "ready" && state.lint.legacy.workspaceDocs.length) return;
+  if (!state.workspace?.files?.length) {
+    return { workspaceFileCount: 0, usedWorkspaceCache: true };
+  }
   const explorerFiles = legacyWorkspaceTxtFiles();
-  state.lint.legacy.workspaceLoad = { status: "loading", files: legacyWorkspaceFileStatesForExplorer(), error: "" };
+  const signature = legacyWorkspaceFileSignature(explorerFiles);
+  if (!explorerFiles.length) {
+    state.lint.legacy.workspaceDocs = [];
+    state.lint.legacy.workspaceLoad = { status: "ready", files: [], error: "", signature };
+    return { workspaceFileCount: 0, usedWorkspaceCache: true };
+  }
+  if (state.lint.legacy.workspaceLoad.status === "ready" && state.lint.legacy.workspaceLoad.signature === signature) {
+    state.lint.legacy.workspaceDocs = mergeOpenLegacyWorkspaceDocs(state.lint.legacy.workspaceDocs);
+    return { workspaceFileCount: explorerFiles.length, usedWorkspaceCache: true };
+  }
+  state.lint.legacy.workspaceLoad = { status: "loading", files: legacyWorkspaceFileStatesForExplorer(), error: "", signature };
   state.lint.legacy.workspaceDocs = [];
-  renderChrome();
+  let workspaceRenderMs = measureRenderChrome();
   const docs = [];
   const fileStates = [];
+  const readStarted = perfNow();
+  const results = await openNativePathsBulk(explorerFiles.map((file) => file.path), TableDocument);
+  const readAndParseMs = elapsedMs(readStarted);
+  const workspaceParseMs = results.reduce((total, result) => total + (result.parseMs ?? 0), 0);
   for (let index = 0; index < explorerFiles.length; index += 1) {
-    if (!legacyLintDisplayActive() || version !== state.lint.legacy.version) return;
-    const file = explorerFiles[index];
-    try {
-      const [doc] = await openNativePaths([file.path], TableDocument);
-      if (doc) {
-        docs.push(doc);
-        fileStates.push({
-          filePath: file.path,
-          fileName: file.name,
-          listedInExplorer: true,
-          loadedForIndex: true,
-          parsedForLint: true,
-          parseError: ""
-        });
-      }
-    } catch (error) {
-      fileStates.push({
-        filePath: file.path,
-        fileName: file.name,
-        listedInExplorer: true,
-        loadedForIndex: true,
-        parsedForLint: false,
-        parseError: error instanceof Error ? error.message : String(error)
-      });
+    if (!legacyLintDisplayActive() || version !== state.lint.legacy.version) {
+      return {
+        workspaceFileCount: explorerFiles.length,
+        workspaceReadMs: Math.max(0, readAndParseMs - workspaceParseMs),
+        workspaceParseMs,
+        bulkRead: results.some((result) => result.bulkRead),
+        usedWorkspaceCache: false,
+        workspaceRenderMs
+      };
     }
-    if (index % 20 === 19) await yieldToUi();
+    const file = explorerFiles[index];
+    const result = results[index] ?? { error: "No native read result returned." };
+    if (result.doc) docs.push(result.doc);
+    fileStates.push({
+      filePath: file.path,
+      fileName: file.name,
+      listedInExplorer: true,
+      readForLint: true,
+      loadedForIndex: true,
+      parsedForLint: Boolean(result.doc && !result.error),
+      parseError: result.error ?? ""
+    });
   }
-  if (!legacyLintDisplayActive() || version !== state.lint.legacy.version) return;
+  if (!legacyLintDisplayActive() || version !== state.lint.legacy.version) {
+    return {
+      workspaceFileCount: explorerFiles.length,
+      workspaceReadMs: Math.max(0, readAndParseMs - workspaceParseMs),
+      workspaceParseMs,
+      bulkRead: results.some((result) => result.bulkRead),
+      usedWorkspaceCache: false,
+      workspaceRenderMs
+    };
+  }
   state.lint.legacy.workspaceDocs = mergeOpenLegacyWorkspaceDocs(docs);
-  state.lint.legacy.workspaceLoad = { status: "ready", files: fileStates, error: "" };
-  renderChrome();
+  state.lint.legacy.workspaceLoad = { status: "ready", files: fileStates, error: "", signature };
+  workspaceRenderMs += measureRenderChrome();
+  return {
+    workspaceFileCount: explorerFiles.length,
+    workspaceReadMs: Math.max(0, readAndParseMs - workspaceParseMs),
+    workspaceParseMs,
+    bulkRead: results.some((result) => result.bulkRead),
+    usedWorkspaceCache: false,
+    workspaceRenderMs
+  };
+}
+
+function legacyWorkspaceFileSignature(files) {
+  return files.map((file) => [
+    lintDocKey({ path: file.path, name: file.name }),
+    file.modified_ms ?? file.modifiedMs ?? "",
+    file.size ?? ""
+  ].join(":")).join("\u001f");
 }
 
 function legacyWorkspaceTxtFiles() {

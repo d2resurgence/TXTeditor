@@ -28,6 +28,9 @@ import {
 import { movedCell, normalizeVectorLspTooltip, shouldDrawCellText, shouldShowFirstColumnHover, VECTOR_LSP_HOVER_DELAY_MS } from "../src/ui/canvas-grid.js";
 import { boundedTableExtent, classifyGridHit, classifyPanePoint, classifyResizeHandle, columnColorIndex } from "../src/ui/grid-geometry.js";
 import {
+  openNativePathsBulk
+} from "../src/core/io.js";
+import {
   LINT_RULES,
   buildWorkspaceFileStates,
   buildWorkspaceIndex,
@@ -895,6 +898,17 @@ test("lint catches duplicate excel identifiers and maps diagnostics to cells", (
   assert.equal(diagnosticsForDocument(diagnostics, doc).length > 0, true);
 });
 
+test("duplicate Excel lint preserves duplicate pairs without quadratic unique-row scans", () => {
+  const doc = TableDocument.fromText("armor.txt", "code\tname\nabc\tOne\nabc\tTwo\nabc\tThree\nExpansion\tSkip\nExpansion\tSkip");
+  const diagnostics = runLint([doc], createDefaultLintSettings()).filter((item) => item.ruleId === "Basic/NoDuplicateExcel");
+  assert.equal(diagnostics.length, 3);
+  assert.deepEqual(diagnostics.map((item) => item.rowIndex), [2, 3, 3]);
+  const source = readFileSync(new URL("../src/core/lint-engine.js", import.meta.url), "utf8");
+  const body = source.match(/function lintNoDuplicateExcel\(index, ctx\) \{[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.match(body, /const seen = new Map\(\);/);
+  assert.doesNotMatch(body, /for \(let j = i \+ 1;/);
+});
+
 test("Basic/LinkedExcel reports bad references from workspace docs with exact cells", () => {
   const docs = [
     TableDocument.fromText("properties.txt", "code\nknown-prop", { path: "excel/properties.txt" }),
@@ -1326,7 +1340,8 @@ test("app source has real Explorer and Problems toggles with persisted resize st
   assert.match(source, /async function toggleProblemsPanel\(\)/);
   assert.match(source, /txteditor\.sidebarWidth/);
   assert.match(source, /txteditor\.problemsHeight/);
-  assert.match(source, /state\.problemsVisible/);
+  assert.match(source, /problemsVisible: localStorage\.getItem\("txteditor\.problems"\) === "visible"/);
+  assert.match(source, /localStorage\.setItem\("txteditor\.problems", state\.problemsVisible \? "visible" : "hidden"\)/);
 });
 
 test("Problems lint panel is gated by the active P panel and lint enabled state", () => {
@@ -1454,19 +1469,58 @@ test("Settings and Problems controls switch between Vector-LSP and Legacy Lint",
 
 test("Legacy Lint is isolated from Vector-LSP traffic and writes the shared diagnostic pipeline", () => {
   const source = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
-  assert.match(source, /function scheduleLegacyLintForChange\(doc\)/);
-  assert.match(source, /const diagnostics = runLint\(activeLegacyLintDocuments\(\), state\.lint\.legacy\.settings\);/);
+  assert.match(source, /function scheduleLegacyLintForOpen\(reason = "file-opened"\)\s*\{\s*scheduleLegacyLintFull\(reason, 0\);/);
+  assert.match(source, /function scheduleLegacyLintForEdit\(doc\)[\s\S]*const delay = hasDiagnostics \? 120 : 180;[\s\S]*scheduleLegacyLintFull\(hasDiagnostics \? "diagnostic-file-edited" : "file-edited", delay\);/);
+  assert.match(source, /function scheduleLegacyLintFull\(reason = "change", delay = 0\)/);
+  assert.match(source, /const diagnostics = runLintWithWorkspaceIndex\(indexResult\.index, state\.lint\.legacy\.settings\);/);
   assert.match(source, /setLintDiagnostics\(diagnostics\);/);
   assert.match(source, /if \(!state\.lint\.enabled \|\| !isVectorLintEngine\(\)\) \{[\s\S]*vector-diagnostics-ignored/);
   assert.match(source, /async function requestLspHover\(row, col, options = \{\}\) \{\s*if \(!effectiveVectorLspHoverEnabled\(\)\)/);
   assert.match(source, /if \(isVectorLintEngine\(\)\) lspUpdateDoc\(doc, changedRows\)\.catch/);
-  assert.match(source, /else scheduleLegacyLintForChange\(doc\);/);
+  assert.match(source, /else scheduleLegacyLintForEdit\(doc\);/);
   assert.match(source, /if \(isVectorLintEngine\(\)\) \{\s*lspOpenDoc\(doc\)\.catch/);
-  assert.match(source, /else scheduleLegacyLintForChange\(doc\);/);
+  assert.match(source, /else \{\s*scheduleLegacyLintForOpen\("file-opened"\);/);
   assert.match(source, /if \(!isVectorLintEngine\(\) \|\| !state\.lsp\.started\) return false;/);
   assert.match(source, /if \(!isVectorLintEngine\(\) \|\| !state\.lsp\.started\) return;/);
   assert.match(source, /state\.lint\.legacy\.workspaceDocs = mergeOpenLegacyWorkspaceDocs\(docs\);/);
   assert.match(source, /state\.lint\.legacy\.workspaceDocs\.find/);
+});
+
+test("Legacy Lint activation paths schedule immediate runs without changing the P tab model", () => {
+  const source = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+  const addDocument = source.match(/async function addDocument\(doc\)[\s\S]*?\nasync function openFile\(\)/)?.[0] ?? "";
+  assert.match(source, /function legacyLintDisplayActive\(\)\s*\{\s*return lintActive\(\) && isLegacyLintEngine\(\);/);
+  assert.match(source, /else scheduleLegacyLintFull\("workspace-opened", 0\);/);
+  assert.match(source, /scheduleLegacyLintFull\("engine-switched-legacy", 0\);/);
+  assert.match(source, /scheduleLegacyLintFull\("lint-enabled", 0\);/);
+  assert.match(source, /scheduleLegacyLintFull\("profile-changed", 0\);/);
+  assert.match(source, /scheduleLegacyLintFull\("problems-opened", 0\);/);
+  assert.match(addDocument, /scheduleLegacyLintForOpen\("file-opened"\);/);
+  assert.doesNotMatch(addDocument, /scheduleLegacyLintForEdit\(doc\)/);
+});
+
+test("Legacy Lint workspace loading uses bulk native reads and cache signatures", async () => {
+  const source = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+  const rust = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
+  assert.match(source, /openNativePathsBulk\(explorerFiles\.map\(\(file\) => file\.path\), TableDocument\)/);
+  assert.match(source, /function legacyWorkspaceFileSignature\(files\)/);
+  assert.match(source, /workspaceLoad\.status === "ready" && state\.lint\.legacy\.workspaceLoad\.signature === signature/);
+  assert.match(source, /workspaceIndexCache/);
+  assert.match(rust, /fn read_text_files\(paths: Vec<String>\) -> Vec<Result<TextFilePayload, String>>/);
+  assert.match(rust, /read_text_files,/);
+  assert.match(rust, /modified_ms: Option<u64>/);
+  const results = await openNativePathsBulk(["a.txt", "bad.txt"], TableDocument, async (command, args) => {
+    assert.equal(command, "read_text_files");
+    assert.deepEqual(args.paths, ["a.txt", "bad.txt"]);
+    return [
+      { Ok: { path: "a.txt", name: "a.txt", text: "col\n1\n", encoding: "utf-8" } },
+      { Err: "failed to read" }
+    ];
+  });
+  assert.equal(results.length, 2);
+  assert.equal(results[0].doc.name, "a.txt");
+  assert.equal(results[0].bulkRead, true);
+  assert.equal(results[1].error, "failed to read");
 });
 
 test("resize interactions clear hover state and block stale hover results", () => {
