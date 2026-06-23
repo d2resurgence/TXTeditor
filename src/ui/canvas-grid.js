@@ -18,6 +18,9 @@ const GRID_COLORS = {
   firstColumnBorder: "#4f5c6a",
   activeHeader: "#315f8f",
   activeHeaderText: "#ffffff",
+  activeRowHeaderHighlight: "rgba(255, 255, 255, .28)",
+  activeRowHeaderShadow: "rgba(4, 16, 28, .42)",
+  activeRowHeaderSheen: "rgba(255, 255, 255, .08)",
   frozen: "#252a31",
   frozenHeader: "#30343b",
   grid: "#3a3d41",
@@ -53,6 +56,9 @@ const GRID_CSS_VARS = {
   firstColumnBorder: "--grid-first-column-border",
   activeHeader: "--grid-active-header-bg",
   activeHeaderText: "--grid-active-header-text",
+  activeRowHeaderHighlight: "--grid-active-row-header-highlight",
+  activeRowHeaderShadow: "--grid-active-row-header-shadow",
+  activeRowHeaderSheen: "--grid-active-row-header-sheen",
   frozen: "--grid-frozen-bg",
   frozenHeader: "--grid-frozen-header-bg",
   grid: "--grid-line",
@@ -566,12 +572,36 @@ export class CanvasGrid {
     this.ctx.fillRect(0, y, this.rowHeaderWidth, height);
     this.ctx.strokeStyle = GRID_COLORS.grid;
     this.ctx.strokeRect(0, y, this.rowHeaderWidth, height);
+    if (activeHeader) this.drawActiveRowHeaderChrome(y, height);
     this.ctx.fillStyle = selected ? GRID_COLORS.textSelected : activeHeader ? GRID_COLORS.activeHeaderText : GRID_COLORS.rowText;
     this.ctx.font = this.font(400);
     const label = String(row + 1);
     const x = Math.max(6, this.rowHeaderWidth - this.ctx.measureText(label).width - 8);
     this.ctx.textBaseline = "middle";
     this.ctx.fillText(label, x, y + height / 2);
+  }
+
+  drawActiveRowHeaderChrome(y, height) {
+    if (height <= 2 || this.rowHeaderWidth <= 2) return;
+    const ctx = this.ctx;
+    const right = this.rowHeaderWidth - 1.5;
+    const bottom = y + height - 1.5;
+    ctx.save();
+    ctx.fillStyle = GRID_COLORS.activeRowHeaderSheen;
+    ctx.fillRect(2, y + 2, Math.max(0, this.rowHeaderWidth - 4), Math.max(1, Math.floor(height * .35)));
+    ctx.strokeStyle = GRID_COLORS.activeRowHeaderHighlight;
+    ctx.beginPath();
+    ctx.moveTo(1.5, bottom - 1);
+    ctx.lineTo(1.5, y + 1.5);
+    ctx.lineTo(right - 1, y + 1.5);
+    ctx.stroke();
+    ctx.strokeStyle = GRID_COLORS.activeRowHeaderShadow;
+    ctx.beginPath();
+    ctx.moveTo(1.5, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.lineTo(right, y + 1.5);
+    ctx.stroke();
+    ctx.restore();
   }
 
   drawCell(row, column, x, y, width, height, options = {}) {

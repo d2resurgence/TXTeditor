@@ -1765,6 +1765,19 @@ test("active cell highlights both the first-row header and left row header", () 
   assert.match(css, /--grid-active-header-text: var\(--activeHeaderText\);/);
 });
 
+test("active row header draws raised chrome over the row index only", () => {
+  const source = readFileSync(new URL("../src/ui/canvas-grid.js", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  assert.match(source, /if \(activeHeader\) this\.drawActiveRowHeaderChrome\(y, height\);/);
+  assert.match(source, /drawActiveRowHeaderChrome\(y, height\) \{/);
+  assert.match(source, /GRID_COLORS\.activeRowHeaderHighlight/);
+  assert.match(source, /GRID_COLORS\.activeRowHeaderShadow/);
+  assert.match(source, /GRID_COLORS\.activeRowHeaderSheen/);
+  assert.match(css, /--grid-active-row-header-highlight:/);
+  assert.match(css, /--grid-active-row-header-shadow:/);
+  assert.match(css, /--grid-active-row-header-sheen:/);
+});
+
 test("Find UI is a centered modal and text inputs keep native shortcuts", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");

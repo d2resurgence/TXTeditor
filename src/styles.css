@@ -76,6 +76,9 @@
   --grid-first-column-frozen-bg: var(--firstColumnFrozenBg);
   --grid-active-header-bg: var(--activeHeaderBg);
   --grid-active-header-text: var(--activeHeaderText);
+  --grid-active-row-header-highlight: rgba(255, 255, 255, .28);
+  --grid-active-row-header-shadow: rgba(0, 0, 0, .46);
+  --grid-active-row-header-sheen: rgba(255, 255, 255, .07);
   --grid-frozen-bg: var(--frozenBg);
   --grid-frozen-header-bg: var(--frozenCornerBg);
   --grid-line: var(--gridLine);
@@ -184,6 +187,9 @@
   --grid-first-column-frozen-bg: var(--firstColumnFrozenBg);
   --grid-active-header-bg: var(--activeHeaderBg);
   --grid-active-header-text: var(--activeHeaderText);
+  --grid-active-row-header-highlight: rgba(255, 255, 255, .88);
+  --grid-active-row-header-shadow: rgba(63, 84, 106, .42);
+  --grid-active-row-header-sheen: rgba(255, 255, 255, .34);
   --grid-frozen-bg: var(--frozenBg);
   --grid-frozen-header-bg: var(--frozenCornerBg);
   --grid-line: var(--gridLine);
