@@ -748,9 +748,7 @@ function onDockPointerCancel(event) {
 
 function wireDocking() {
   const handles = new Set([
-    ...document.querySelectorAll("[data-dock-panel]"),
-    els.sidebar?.querySelector("[data-dock-panel='explorer']"),
-    els.problemsPanel?.querySelector("[data-dock-panel='problems']")
+    ...document.querySelectorAll(".activity-button[data-dock-panel], .sidebar-header[data-dock-panel], .problems-header[data-dock-panel]")
   ].filter(Boolean));
   for (const handle of handles) {
     const panel = handle.dataset.dockPanel;

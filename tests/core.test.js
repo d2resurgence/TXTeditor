@@ -1409,12 +1409,26 @@ test("dock settings and drag controls expose Explorer, Problems, and reset layou
   assert.match(appSettings, /resetDockLayout\(\); refresh\(\);/);
   assert.match(source, /const DOCK_DRAG_THRESHOLD = 4;/);
   assert.match(source, /function wireDocking\(\)/);
+  assert.match(source, /document\.querySelectorAll\("\.activity-button\[data-dock-panel\], \.sidebar-header\[data-dock-panel\], \.problems-header\[data-dock-panel\]"\)/);
+  assert.doesNotMatch(source, /\.\.\.document\.querySelectorAll\("\[data-dock-panel\]"\)/);
   assert.match(source, /handle\.draggable = false;/);
   assert.match(source, /handle\.dataset\.dockDragHandle = "true";/);
   assert.match(source, /function startDockPointerDrag\(panel, handle, event\)/);
   assert.match(source, /function updateDockDragTarget\(x, y\)/);
   assert.match(source, /const target = updateDockDragTarget\(event\.clientX, event\.clientY\);/);
   assert.match(source, /if \(edge\) setPanelDock\(state\.panel, edge\);/);
+});
+
+test("dock drop hints are subtle and docked controls avoid clipping", () => {
+  const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.dock-drop-zone\s*\{[\s\S]*background:\s*transparent;[\s\S]*font-size:\s*0;/);
+  assert.match(css, /\.dock-drop-zone::after\s*\{[\s\S]*opacity:\s*\.26;/);
+  assert.match(css, /\.dock-drop-zone\.drag-over::after\s*\{[\s\S]*opacity:\s*\.78;/);
+  assert.match(css, /\.main\s*\{[\s\S]*grid-template-rows:\s*34px auto minmax\(0, 1fr\);/);
+  assert.match(css, /\.toolbar\s*\{[\s\S]*overflow-x:\s*auto;/);
+  assert.match(css, /\.problems-panel\s*\{[\s\S]*grid-template-rows:\s*auto auto minmax\(0, 1fr\);/);
+  assert.match(css, /\.problems-panel\[data-dock-edge="left"\] \.problems-header,\s*\.problems-panel\[data-dock-edge="right"\] \.problems-header\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\);/);
+  assert.match(css, /\.problems-panel\[data-dock-edge="left"\] \.lint-controls,\s*\.problems-panel\[data-dock-edge="right"\] \.lint-controls\s*\{[\s\S]*min-height:\s*38px;/);
 });
 
 test("Problems lint panel is gated by the active P panel and lint enabled state", () => {

@@ -359,16 +359,24 @@ button.active {
   align-items: center;
   justify-content: center;
   pointer-events: auto;
-  border: 1px dashed var(--accent);
-  background: color-mix(in srgb, var(--surface-3) 88%, transparent);
-  color: var(--text-strong);
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  font-size: 0;
 }
 
-.dock-drop-zone.drag-over {
-  background: var(--selection);
+.dock-drop-zone::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  background: var(--accent);
+  opacity: .26;
+  transition: opacity .12s ease, transform .12s ease, box-shadow .12s ease;
+}
+
+.dock-drop-zone.drag-over::after {
+  opacity: .78;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .dock-drop-zone-left {
@@ -378,11 +386,27 @@ button.active {
   width: 92px;
 }
 
+.dock-drop-zone-left::after {
+  top: 18px;
+  bottom: 18px;
+  left: 50%;
+  width: 4px;
+  transform: translateX(-50%);
+}
+
 .dock-drop-zone-right {
   right: 12px;
   top: 12px;
   bottom: 12px;
   width: 92px;
+}
+
+.dock-drop-zone-right::after {
+  top: 18px;
+  right: 50%;
+  bottom: 18px;
+  width: 4px;
+  transform: translateX(50%);
 }
 
 .dock-drop-zone-top {
@@ -392,11 +416,27 @@ button.active {
   height: 72px;
 }
 
+.dock-drop-zone-top::after {
+  left: 18px;
+  right: 18px;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+}
+
 .dock-drop-zone-bottom {
   left: 58px;
   right: 12px;
   bottom: 12px;
   height: 72px;
+}
+
+.dock-drop-zone-bottom::after {
+  left: 18px;
+  right: 18px;
+  bottom: 50%;
+  height: 4px;
+  transform: translateY(50%);
 }
 
 .activity-button {
@@ -603,7 +643,7 @@ body.dock-dragging * {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: 34px 38px 1fr;
+  grid-template-rows: 34px auto minmax(0, 1fr);
 }
 
 .tabs {
@@ -667,12 +707,14 @@ body.dock-dragging * {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  height: 38px;
+  min-height: 38px;
   padding: 4px 8px;
   background: var(--surface-3);
   border-bottom: 1px solid var(--line);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   flex-wrap: nowrap;
+  scrollbar-width: thin;
 }
 
 .toolbar button {
@@ -995,7 +1037,7 @@ body.dock-dragging * {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: 38px auto 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
   position: relative;
   background: var(--surface-2);
   overflow: hidden;
@@ -1015,10 +1057,19 @@ body.dock-dragging * {
   justify-content: space-between;
   gap: 12px;
   min-width: 0;
-  height: 38px;
+  min-height: 38px;
   padding: 0 10px 0 0;
   border-bottom: 1px solid var(--line-soft);
   background: var(--surface-3);
+  overflow: hidden;
+}
+
+.problems-panel[data-dock-edge="left"] .problems-header,
+.problems-panel[data-dock-edge="right"] .problems-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
 }
 
 .bottom-tabs {
@@ -1026,6 +1077,10 @@ body.dock-dragging * {
   align-items: stretch;
   height: 100%;
   gap: 0;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .bottom-tab {
@@ -1065,7 +1120,17 @@ body.dock-dragging * {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.problems-panel[data-dock-edge="left"] .lint-controls,
+.problems-panel[data-dock-edge="right"] .lint-controls {
+  min-height: 38px;
+  padding: 4px 8px;
+  border-top: 1px solid var(--line-soft);
+  justify-content: flex-start;
 }
 
 .lint-controls button {
