@@ -1969,6 +1969,19 @@ function markDocHoverReady(doc, uri, reason) {
   if (doc === activeDoc()) scheduleHoverPrewarm(`hover-ready:${reason}`);
 }
 
+const LSP_PRELOAD_SKIP = new Set([
+  "aiparms", "animdata", "arena", "automap", "chartemplate", "composit",
+  "compcode", "cubemod", "cubetype", "elemtypes", "hitclass", "misscalc",
+  "monai", "monmode", "monname", "objgroup", "objmode", "skillcalc",
+  "soundenviron", "sounds", "storepage", "uniqueappellation", "uniqueprefix",
+  "uniquesuffix", "uniquetitle", "weaponclass",
+]);
+
+function lspPreloadSkipped(filePath) {
+  const base = filePath.split(/[\\/]/).pop().replace(/\.[^.]+$/, "").toLowerCase();
+  return LSP_PRELOAD_SKIP.has(base) || base.startsWith("cubemain");
+}
+
 async function lspStartWorkspace(workspacePath) {
   if (!isVectorLintEngine()) {
     recordLintEngineEvent("vector-start-skipped", { workspacePath });
@@ -2000,6 +2013,30 @@ async function lspStartWorkspace(workspacePath) {
   renderChrome();
   retryQueuedLspHover("workspace-ready");
   scheduleHoverPrewarm("workspace-ready");
+  if (state.workspace?.files?.length) {
+    const openPaths = new Set(docsWithPaths.map((d) => d.path));
+    const unopenedPaths = state.workspace.files
+      .map((f) => f.path)
+      .filter((p) => !openPaths.has(p) && !p.toLowerCase().endsWith(".tbl") && !lspPreloadSkipped(p));
+    if (unopenedPaths.length) {
+      showPersistentToast(`Loading workspace files…`);
+      (async () => {
+        try {
+          const results = await openNativePathsBulk(unopenedPaths, TableDocument).catch(() => []);
+          const valid = results.filter((r) => r.doc);
+          const total = valid.length;
+          for (let i = 0; i < valid.length; i++) {
+            const r = valid[i];
+            showPersistentToast(`Loading ${r.doc.name} ${i + 1}/${total}`);
+            const wUri = docToUri(r.doc);
+            if (wUri) await lspOpenFile(wUri, r.doc.toText()).catch(() => {});
+          }
+        } finally {
+          hideToast();
+        }
+      })();
+    }
+  }
 }
 
 async function syncOpenDocsToVectorLsp() {
@@ -2754,7 +2791,7 @@ async function goToDefinition() {
     showToast("No definition found.");
     return;
   }
-  const targetPath = pathFromUri(result.uri);
+  const targetPath = pathFromUri(result.uri)?.replace(/\//g, "\\");
   if (!targetPath) return;
   let index = state.docs.findIndex((d) => d.path === targetPath);
   if (index < 0 && isTauriRuntime()) {
@@ -3754,6 +3791,19 @@ function showToast(message) {
   els.toast.classList.remove("hidden");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => els.toast.classList.add("hidden"), 2600);
+}
+
+function showPersistentToast(message) {
+  els.toast.textContent = message;
+  els.toast.classList.remove("hidden");
+  clearTimeout(toastTimer);
+  toastTimer = 0;
+}
+
+function hideToast() {
+  clearTimeout(toastTimer);
+  toastTimer = 0;
+  els.toast.classList.add("hidden");
 }
 
 function escapeHtml(value) {
