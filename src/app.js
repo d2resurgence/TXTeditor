@@ -3505,6 +3505,7 @@ function renderLegacyLintRulesPanel() {
 
 function renderChrome() {
   const started = perfNow();
+  const fileListScroll = els.fileList.scrollTop;
   syncDockLayout();
   els.shell.classList.toggle("sidebar-hidden", !state.sidebarVisible);
   els.shell.classList.toggle("problems-open", state.problemsVisible);
@@ -3569,6 +3570,7 @@ function renderChrome() {
   els.fileList.innerHTML = state.docs
     .map((doc, index) => `<button class="${index === state.active ? "active" : ""}" data-tab="${index}">${escapeHtml(doc.name)}${problemBadgeForPath(doc.path || doc.name)}</button>`)
     .join("") + (workspaceFiles ? `<div class="separator"></div>${workspaceFiles}` : "");
+  els.fileList.scrollTop = fileListScroll;
   renderProblemsPanelIfNeeded();
   for (const button of document.querySelectorAll("[data-tab]")) {
     button.addEventListener("click", (event) => {
