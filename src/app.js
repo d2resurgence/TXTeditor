@@ -274,6 +274,10 @@ const els = {
   palette: document.getElementById("palette"),
   paletteInput: document.getElementById("paletteInput"),
   paletteResults: document.getElementById("paletteResults"),
+  columnSearch: document.getElementById("columnSearch"),
+  columnSearchInput: document.getElementById("columnSearchInput"),
+  columnSearchClose: document.getElementById("columnSearchClose"),
+  columnSearchResults: document.getElementById("columnSearchResults"),
   toast: document.getElementById("toast"),
   contextMenu: document.getElementById("contextMenu"),
   closeDialog: document.getElementById("closeDialog"),
@@ -805,6 +809,28 @@ function wireEvents() {
     }
     if (event.key === "Escape") els.palette.classList.add("hidden");
   });
+  els.columnSearchClose.addEventListener("click", closeColumnSearch);
+  els.columnSearchInput.addEventListener("input", () => renderColumnSearchResults(els.columnSearchInput.value));
+  els.columnSearchInput.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") { event.preventDefault(); closeColumnSearch(); return; }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const active = els.columnSearchResults.querySelector("button.active");
+      if (active) jumpToColumn(Number(active.dataset.col));
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const btns = [...els.columnSearchResults.querySelectorAll("button")];
+      const idx = btns.findIndex((b) => b.classList.contains("active"));
+      btns[idx]?.classList.remove("active");
+      const next = event.key === "ArrowDown"
+        ? btns[Math.min(idx + 1, btns.length - 1)]
+        : btns[Math.max(idx - 1, 0)];
+      next?.classList.add("active");
+      next?.scrollIntoView({ block: "nearest" });
+    }
+  });
 }
 
 async function wireCloseHandler() {
@@ -856,6 +882,11 @@ function handleGlobalKeydown(event) {
     els.host.focus();
     return;
   }
+  if (event.key === "Escape" && !els.columnSearch.classList.contains("hidden")) {
+    event.preventDefault();
+    closeColumnSearch();
+    return;
+  }
   if (editingCell && !(event.ctrlKey && ["s", "w", "h", "l"].includes(key))) return;
   if (!editingCell && isTextInputTarget(event.target)) return;
   if (event.ctrlKey && (key === "+" || key === "=")) return prevent(event, () => runCommand("zoom-in"));
@@ -872,6 +903,7 @@ function handleGlobalKeydown(event) {
   if (event.ctrlKey && key === "z") return prevent(event, undo);
   if (event.ctrlKey && key === "y") return prevent(event, redo);
   if (event.ctrlKey && key === "p") return prevent(event, showPalette);
+  if (event.altKey && key === "q") return prevent(event, showColumnSearch);
   if (event.ctrlKey && key === "w") return prevent(event, () => closeTab(state.active));
   if (event.ctrlKey && key === "c") return prevent(event, copySelection);
   if (event.ctrlKey && key === "x") return prevent(event, cutSelection);
@@ -3204,6 +3236,47 @@ function commitResize(resize) {
 
 function toggleSidebar() {
   toggleExplorerPane();
+}
+
+function showColumnSearch() {
+  if (!hasOpenDocument()) return;
+  els.columnSearch.classList.remove("hidden");
+  els.columnSearchInput.value = "";
+  renderColumnSearchResults("");
+  els.columnSearchInput.focus();
+}
+
+function closeColumnSearch() {
+  els.columnSearch.classList.add("hidden");
+  els.host.focus();
+}
+
+function renderColumnSearchResults(query) {
+  const doc = activeDoc();
+  const q = query.toLowerCase();
+  const results = [];
+  for (let col = 0; col < doc.columnCount; col++) {
+    const name = doc.getCell(0, col) ?? "";
+    if (!q || name.toLowerCase().includes(q)) results.push({ col, name });
+    if (results.length >= 50) break;
+  }
+  els.columnSearchResults.innerHTML = "";
+  for (const { col, name } of results) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = name || `Column ${col + 1}`;
+    btn.dataset.col = String(col);
+    btn.addEventListener("click", () => jumpToColumn(col));
+    els.columnSearchResults.append(btn);
+  }
+  els.columnSearchResults.querySelector("button")?.classList.add("active");
+}
+
+function jumpToColumn(col) {
+  closeColumnSearch();
+  state.selection.set(0, col);
+  grid.scrollCellIntoView(0, col);
+  grid.draw();
 }
 
 function showPalette() {

@@ -1222,6 +1222,75 @@ details:not([open]) .problem-file-header::before {
   border-radius: 5px;
 }
 
+.column-search {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  top: 64px;
+  transform: translateX(-50%);
+  width: min(240px, calc(100vw - 32px));
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 60px var(--shadow);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.column-search.hidden {
+  display: none;
+}
+
+.column-search-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.column-search-header input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  background: var(--input-bg);
+  border: 1px solid var(--button-border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0 10px;
+  outline: none;
+}
+
+.column-search-header input:focus {
+  border-color: var(--accent);
+}
+
+.column-search-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  font-size: 14px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.column-search-results {
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.column-search-results button {
+  height: 28px;
+  text-align: left;
+  padding: 0 10px;
+  border-radius: 5px;
+}
+
 .context-menu {
   position: fixed;
   z-index: 30;
