@@ -46,6 +46,7 @@ import {
   openFilesNative,
   openNativePaths,
   openNativePathsBulk,
+  openWorkspaceFromPath,
   openWorkspaceNative,
   pickFilePath,
   pickFolderPath,
@@ -979,6 +980,8 @@ async function openFolder() {
     if (!workspace) return;
     state.workspace = workspace;
     resetLegacyWorkspaceIndex();
+    state.config.lastWorkspacePath = workspace.path;
+    saveConfig(state.config).catch(() => {});
     if (isVectorLintEngine()) lspStartWorkspace(workspace.path).catch(showError);
     else scheduleLegacyLintFull("workspace-opened", 0);
     renderChrome();
@@ -2874,6 +2877,20 @@ async function goToDiagnostic(id) {
 async function loadConfig() {
   const config = await getConfig().catch(() => ({}));
   state.config = config ?? {};
+  if (state.config.restoreWorkspace && state.config.lastWorkspacePath) {
+    try {
+      const workspace = await openWorkspaceFromPath(state.config.lastWorkspacePath);
+      if (workspace) {
+        state.workspace = workspace;
+        resetLegacyWorkspaceIndex();
+        if (isVectorLintEngine()) lspStartWorkspace(workspace.path).catch(showError);
+        else scheduleLegacyLintFull("workspace-opened", 0);
+        renderChrome();
+      }
+    } catch {
+      // previous workspace path no longer valid, ignore
+    }
+  }
 }
 
 function showAppSettings() {

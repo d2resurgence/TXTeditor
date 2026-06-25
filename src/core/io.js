@@ -40,6 +40,11 @@ export async function openWorkspaceNative() {
   return api.invoke("list_workspace_files", { path: selected });
 }
 
+export async function openWorkspaceFromPath(path) {
+  const api = await tauriApi();
+  return api.invoke("list_workspace_files", { path });
+}
+
 export async function openNativePaths(paths, DocumentType, invokeFn = null) {
   const results = await openNativePathsBulk(paths, DocumentType, invokeFn);
   const failed = results.find((result) => result.error);

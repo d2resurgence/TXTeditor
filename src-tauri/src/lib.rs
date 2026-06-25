@@ -46,6 +46,10 @@ struct AppConfig {
     lsp_preload_skip: Vec<String>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     autofit_columns: HashMap<String, AutofitEntry>,
+    #[serde(default)]
+    restore_workspace: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_workspace_path: Option<String>,
 }
 
 struct AppConfigState {
