@@ -35,6 +35,9 @@ fixtures/*20k*.tsv
 references/
 *.zip
 
+# local machine config (committed as config.json.example, customized per-machine)
+config.json
+
 # OS files
 .DS_Store
 Thumbs.db
