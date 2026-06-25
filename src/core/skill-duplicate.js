@@ -206,14 +206,16 @@ export function buildMissileRemap(changeset) {
 
 /**
  * Build the full row value array for a missile entry, applying name and reference remaps.
+ * overrideId: if provided, replaces the copied Id with the target slot's Id.
  */
-export function buildMissileValues(missilesDoc, entry, remap, origSkillName, newSkillName) {
+export function buildMissileValues(missilesDoc, entry, remap, origSkillName, newSkillName, overrideId = null) {
   const mCols = makeColIndex(missilesDoc);
   const values = entry.sourceRow >= 0 ? getRowValues(missilesDoc, entry.sourceRow) : Array(missilesDoc.columnCount).fill('');
 
   function set(col, val) { const idx = mCols.get(col.toLowerCase()); if (idx != null) values[idx] = val; }
 
   set('Missile', entry.newName);
+  if (overrideId != null) set('Id', overrideId);
 
   const skillIdx = mCols.get('skill');
   if (skillIdx != null && origSkillName && values[skillIdx].trim().toLowerCase() === origSkillName.toLowerCase()) {
@@ -232,15 +234,16 @@ export function buildMissileValues(missilesDoc, entry, remap, origSkillName, new
 
 /**
  * Build the full row value array for the skill entry, applying name and missile remaps.
+ * overrideId: if provided, uses target slot's existing Id instead of nextFreeId.
  */
-export function buildSkillValues(skillsDoc, entry, remap) {
+export function buildSkillValues(skillsDoc, entry, remap, overrideId = null) {
   const sCols = makeColIndex(skillsDoc);
   const values = getRowValues(skillsDoc, entry.sourceRow);
 
   function set(col, val) { const idx = sCols.get(col.toLowerCase()); if (idx != null) values[idx] = val; }
 
   set('skill', entry.newName);
-  set('Id', String(entry.newId));
+  set('Id', overrideId ?? String(entry.newId));
   set('charclass', '');
   set('skilldesc', '');
   set('cost mult', '');

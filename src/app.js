@@ -3604,6 +3604,19 @@ function _skillDupRenderPreview(changeset) {
   els.skillDupPreview.classList.remove("hidden");
 }
 
+function _readTargetId(doc, targetRow) {
+  for (let c = 0; c < doc.columnCount; c++) {
+    if (doc.getCell(0, c).toLowerCase() === 'id') {
+      if (targetRow >= 1 && targetRow < doc.rowCount) {
+        const v = doc.getCell(targetRow, c).trim();
+        return v || null;
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
 function skillDupApply() {
   if (!_skillDupChangeset) return;
   const changeset = _skillDupChangeset;
@@ -3618,14 +3631,16 @@ function skillDupApply() {
   for (const entry of changeset.missiles) {
     const origSkill = isMissileMode ? null : changeset.skill.originalName;
     const newSkill  = isMissileMode ? null : changeset.skill.newName;
-    const values = buildMissileValues(missilesDoc, entry, remap, origSkill, newSkill);
+    const overrideId = _readTargetId(missilesDoc, entry.targetRow) ?? String(missilesDoc.rowCount - 1);
+    const values = buildMissileValues(missilesDoc, entry, remap, origSkill, newSkill, overrideId);
     _applyRowWrite(missilesDoc, entry.targetRow, values, `${label} - Missile`);
   }
 
   if (!isMissileMode) {
     const skillsDoc = _findDocByName("Skills.txt");
     if (!skillsDoc) { _skillDupShowError("Skills.txt is no longer open."); return; }
-    const skillValues = buildSkillValues(skillsDoc, changeset.skill, remap);
+    const overrideId = _readTargetId(skillsDoc, changeset.skill.targetRow);
+    const skillValues = buildSkillValues(skillsDoc, changeset.skill, remap, overrideId);
     _applyRowWrite(skillsDoc, changeset.skill.targetRow, skillValues, label);
   }
 
