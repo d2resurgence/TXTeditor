@@ -52,8 +52,11 @@ import {
   pickFolderPath,
   readFileAsDocument,
   saveConfig,
+  readRawTextFiles,
+  writeRawTextFile,
   saveDocumentNative
 } from "./core/io.js";
+import { buildStringIndex, findStringKey, clearStringIndex, isStringIndexLoaded } from "./core/string-table.js";
 import {
   createDefaultLintSettings,
   diagnosticsForDocument,
@@ -360,6 +363,34 @@ const commandLabels = [
 const commands = Object.fromEntries(commandLabels.map(([id]) => [id, () => runCommand(id)]));
 
 const EMPTY_DOC = TableDocument.fromText("Empty", "");
+
+const STRING_KEY_COLUMNS_GLOBAL = new Set(["namestr"]);
+
+const STRING_KEY_COLUMNS_BY_FILE = {
+  uniqueitems: new Set(["index"]),
+  setitems: new Set(["index"]),
+  sets: new Set(["index"]),
+  magicprefix: new Set(["name"]),
+  magicsuffix: new Set(["name"]),
+  rareprefix: new Set(["name"]),
+  raresuffix: new Set(["name"]),
+  itemstatcost: new Set(["descstrpos", "descstrneg"]),
+  levels: new Set(["levelname", "levelwarp"]),
+  misc: new Set(["spelldescstr"]),
+  montype: new Set(["strsing", "strplur"]),
+  runes: new Set(["name"]),
+  superuniques: new Set(["superunique"]),
+  skilldesc: new Set([
+    "str name", "str short", "str long", "str alt", "str mana",
+    "desctexta1", "desctextb1", "desctexta2", "desctextb2", "desctexta3", "desctextb3",
+    "desctexta4", "desctextb4", "desctexta5", "desctextb5", "desctexta6", "desctextb6",
+    "dsc2texta1", "dsc2textb1", "dsc2texta2", "dsc2textb2", "dsc2texta3", "dsc2textb3",
+    "dsc2texta4", "dsc2textb4",
+    "dsc3texta1", "dsc3textb1", "dsc3texta2", "dsc3textb2", "dsc3texta3", "dsc3textb3",
+    "dsc3texta4", "dsc3textb4", "dsc3texta5", "dsc3textb5", "dsc3texta6", "dsc3textb6",
+    "dsc3texta7", "dsc3textb7",
+  ]),
+};
 
 syncDockLayout();
 
@@ -1014,6 +1045,7 @@ async function openFolder() {
     resetLegacyWorkspaceIndex();
     state.config.lastWorkspacePath = workspace.path;
     saveConfig(state.config).catch(() => {});
+    loadStringTablesForWorkspace(workspace.path).catch(() => {});
     if (isVectorLintEngine()) lspStartWorkspace(workspace.path).catch(showError);
     else scheduleLegacyLintFull("workspace-opened", 0);
     renderChrome();
@@ -1028,6 +1060,15 @@ async function saveFile() {
     if (!hasOpenDocument()) {
       showError("No file is open.");
       return false;
+    }
+    if (doc._isJsonStringView && isTauriRuntime()) {
+      const payload = await writeRawTextFile(doc.path, serializeJsonStringView(doc));
+      doc.path = payload.path;
+      doc.name = payload.name;
+      doc.dirty = false;
+      grid.draw();
+      renderChrome();
+      return true;
     }
     if (isTauriRuntime()) {
       const saved = await saveDocumentNative(doc, false);
@@ -2812,9 +2853,94 @@ function scrollProblemsToActiveFile() {
   if (target) target.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
+function isStringKeyCol(colName, fileName) {
+  const col = (colName ?? "").toLowerCase();
+  if (STRING_KEY_COLUMNS_GLOBAL.has(col)) return true;
+  const fileBase = (fileName ?? "").replace(/\.[^.]+$/, "").toLowerCase();
+  return STRING_KEY_COLUMNS_BY_FILE[fileBase]?.has(col) ?? false;
+}
+
+
+async function loadStringTablesForWorkspace(workspacePath) {
+  clearStringIndex();
+  if (!isTauriRuntime()) return;
+  const sep = workspacePath.includes("\\") ? "\\" : "/";
+  const STRING_FILES = ["string.json", "patchstring.json", "expansionstring.json"];
+  if (state.config.stringsPath) {
+    const dir = state.config.stringsPath;
+    const paths = STRING_FILES.map((f) => dir + sep + f);
+    const files = await readRawTextFiles(paths).catch(() => []);
+    buildStringIndex(files);
+    return;
+  }
+  const parts = workspacePath.replace(/[\\/]+$/, "").split(/[\\/]/);
+  for (let up = 0; up <= 2; up++) {
+    if (parts.length - up < 2) break;
+    const dir = [...parts.slice(0, parts.length - up), "local", "LNG", "ENG"].join(sep);
+    const paths = STRING_FILES.map((f) => dir + sep + f);
+    const files = await readRawTextFiles(paths).catch(() => []);
+    if (files.some((f) => f.text != null)) {
+      buildStringIndex(files);
+      return;
+    }
+  }
+  buildStringIndex([]);
+}
+
+function tableDocumentFromJsonStrings(name, filePath, jsonText) {
+  let entries;
+  try { entries = JSON.parse(jsonText); } catch { entries = []; }
+  const rows = [["Key", "Value"]];
+  for (const entry of entries) {
+    if (typeof entry !== "object" || !entry) continue;
+    rows.push([entry.Key ?? "", (entry.Value ?? "").replace(/\n/g, "\\n")]);
+  }
+  const tsv = rows.map((r) => r.map((c) => String(c).replace(/\t/g, " ")).join("\t")).join("\n");
+  const doc = TableDocument.fromText(name, tsv);
+  doc.path = filePath;
+  doc._isJsonStringView = true;
+  return doc;
+}
+
+function serializeJsonStringView(doc) {
+  const entries = [];
+  for (let row = 1; row < doc.rowCount; row++) {
+    const key = doc.getCell(row, 0) ?? "";
+    const value = (doc.getCell(row, 1) ?? "").replace(/\\n/g, "\n");
+    if (key) entries.push({ Key: key, Value: value });
+  }
+  return JSON.stringify(entries, null, 1);
+}
+
+async function openJsonAndNavigate(filePath, entryIndex) {
+  let index = state.docs.findIndex((d) => d._isJsonStringView && d.path === filePath);
+  if (index < 0) {
+    const [file] = await readRawTextFiles([filePath]).catch(() => []);
+    if (!file?.text) { showToast("Could not read string file."); return; }
+    const name = filePath.split(/[\\/]/).pop();
+    const doc = tableDocumentFromJsonStrings(name, filePath, file.text);
+    await addDocument(doc);
+    index = state.active;
+  } else if (index !== state.active) {
+    state.active = index;
+    applyFreezeToDoc(activeDoc());
+    grid.setDocument(activeDoc());
+    updateGridDiagnostics();
+  }
+  const targetRow = clamp(entryIndex + 1, 0, Math.max(0, activeDoc().rowCount - 1));
+  state.selection.set(targetRow, 0);
+  grid.scrollCellIntoView(targetRow, 0);
+  grid.draw();
+  updateActiveProblemHighlight();
+  renderChrome();
+  els.host.focus();
+}
+
 function cellHasReference(row, col) {
+  const doc = activeDoc();
+  if (isStringIndexLoaded() && isStringKeyCol(doc.getCell(0, col), doc.name)) return true;
   if (!isVectorLintEngine() || !state.lsp.started) return false;
-  return Boolean(docToUri(activeDoc()));
+  return Boolean(docToUri(doc));
 }
 
 function charOffsetToColumn(doc, row, charOffset) {
@@ -2827,44 +2953,56 @@ function charOffsetToColumn(doc, row, charOffset) {
 }
 
 async function goToDefinition() {
-  if (!isVectorLintEngine() || !state.lsp.started) return;
+  if (!hasOpenDocument()) return;
   const doc = activeDoc();
-  const uri = docToUri(doc);
-  if (!uri) return;
   const hit = state.contextHit;
   const row = hit?.row ?? state.selection.focus.row;
   const col = hit?.column ?? state.selection.focus.column;
-  const charOffset = computeCharOffset(doc, row, col);
-  const result = await lspDefinition(uri, row, charOffset).catch(() => null);
-  if (!result) {
-    showToast("No definition found.");
-    return;
-  }
-  const targetPath = pathFromUri(result.uri)?.replace(/\//g, "\\");
-  if (!targetPath) return;
-  let index = state.docs.findIndex((d) => d.path === targetPath);
-  if (index < 0 && isTauriRuntime()) {
-    const newDocs = await openNativePaths([targetPath], TableDocument).catch(() => []);
-    if (newDocs.length) {
-      await addDocument(newDocs[0]);
-      index = state.active;
+
+  if (isVectorLintEngine() && state.lsp.started) {
+    const uri = docToUri(doc);
+    if (uri) {
+      const charOffset = computeCharOffset(doc, row, col);
+      const result = await lspDefinition(uri, row, charOffset).catch(() => null);
+      if (result) {
+        const targetPath = pathFromUri(result.uri)?.replace(/\//g, "\\");
+        if (targetPath) {
+          let index = state.docs.findIndex((d) => d.path === targetPath);
+          if (index < 0 && isTauriRuntime()) {
+            const newDocs = await openNativePaths([targetPath], TableDocument).catch(() => []);
+            if (newDocs.length) { await addDocument(newDocs[0]); index = state.active; }
+          }
+          if (index >= 0 && index !== state.active) {
+            state.active = index;
+            applyFreezeToDoc(activeDoc());
+            grid.setDocument(activeDoc());
+            updateGridDiagnostics();
+          }
+          const targetDoc = activeDoc();
+          const targetRow = clamp(result.line, 0, Math.max(0, targetDoc.rowCount - 1));
+          const targetCol = clamp(charOffsetToColumn(targetDoc, targetRow, result.character), 0, Math.max(0, targetDoc.columnCount - 1));
+          state.selection.set(targetRow, targetCol);
+          grid.scrollCellIntoView(targetRow, targetCol);
+          grid.draw();
+          updateActiveProblemHighlight();
+          renderChrome();
+          els.host.focus();
+          return;
+        }
+      }
     }
   }
-  if (index >= 0 && index !== state.active) {
-    state.active = index;
-    applyFreezeToDoc(activeDoc());
-    grid.setDocument(activeDoc());
-    updateGridDiagnostics();
+
+  if (isStringIndexLoaded() && isStringKeyCol(doc.getCell(0, col), doc.name)) {
+    const cellValue = doc.getCell(row, col);
+    const entry = cellValue ? findStringKey(cellValue) : null;
+    if (entry) {
+      await openJsonAndNavigate(entry.filePath, entry.entryIndex);
+      return;
+    }
   }
-  const targetDoc = activeDoc();
-  const targetRow = clamp(result.line, 0, Math.max(0, targetDoc.rowCount - 1));
-  const targetCol = clamp(charOffsetToColumn(targetDoc, targetRow, result.character), 0, Math.max(0, targetDoc.columnCount - 1));
-  state.selection.set(targetRow, targetCol);
-  grid.scrollCellIntoView(targetRow, targetCol);
-  grid.draw();
-  updateActiveProblemHighlight();
-  renderChrome();
-  els.host.focus();
+
+  showToast("No definition found.");
 }
 
 function docHasDiagnostics(doc) {
@@ -2915,6 +3053,7 @@ async function loadConfig() {
       if (workspace) {
         state.workspace = workspace;
         resetLegacyWorkspaceIndex();
+        loadStringTablesForWorkspace(workspace.path).catch(() => {});
         if (isVectorLintEngine()) lspStartWorkspace(workspace.path).catch(showError);
         else scheduleLegacyLintFull("workspace-opened", 0);
         renderChrome();

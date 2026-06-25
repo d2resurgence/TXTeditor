@@ -276,6 +276,32 @@ export async function lspLogListen(callback) {
   return unlisten;
 }
 
+export async function writeRawTextFile(path, text) {
+  const api = await tauriApi();
+  return api.invoke("write_text_file_safe", { path, text });
+}
+
+export async function readRawTextFiles(paths) {
+  if (!isTauriRuntime() || !paths.length) return paths.map((path) => ({ path, text: null }));
+  const api = await tauriApi();
+  try {
+    const results = await api.invoke("read_text_files", { paths });
+    return results.map((entry, i) => {
+      const norm = normalizeNativeReadResult(entry, paths[i], true);
+      return { path: norm.path, text: norm.payload?.text ?? null };
+    });
+  } catch {
+    return Promise.all(paths.map(async (path) => {
+      try {
+        const payload = await api.invoke("read_text_file", { path });
+        return { path, text: payload?.text ?? null };
+      } catch {
+        return { path, text: null };
+      }
+    }));
+  }
+}
+
 export function downloadText(name, text) {
   const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);

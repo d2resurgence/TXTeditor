@@ -808,7 +808,7 @@ fn collect_text_files(path: &Path, files: &mut Vec<WorkspaceFile>, depth: usize)
 fn is_text_like(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|value| value.to_str()).map(|value| value.to_ascii_lowercase()),
-        Some(ext) if matches!(ext.as_str(), "txt" | "tsv" | "tbl" | "csv")
+        Some(ext) if matches!(ext.as_str(), "txt" | "tsv" | "csv" | "json")
     )
 }
 
