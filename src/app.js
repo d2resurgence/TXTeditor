@@ -57,6 +57,7 @@ import {
   saveDocumentNative
 } from "./core/io.js";
 import { buildStringIndex, findStringKey, clearStringIndex, isStringIndexLoaded } from "./core/string-table.js";
+import { resolveSkillDuplicate, resolveMissileDuplicate, buildMissileRemap, buildMissileValues, buildSkillValues } from "./core/skill-duplicate.js";
 import {
   createDefaultLintSettings,
   diagnosticsForDocument,
@@ -281,6 +282,19 @@ const els = {
   columnSearchInput: document.getElementById("columnSearchInput"),
   columnSearchClose: document.getElementById("columnSearchClose"),
   columnSearchResults: document.getElementById("columnSearchResults"),
+  skillDupDialog: document.getElementById("skillDupDialog"),
+  skillDupModeSkill: document.getElementById("skillDupModeSkill"),
+  skillDupModeMissile: document.getElementById("skillDupModeMissile"),
+  skillDupSourceLabel: document.getElementById("skillDupSourceLabel"),
+  skillDupSource: document.getElementById("skillDupSource"),
+  skillDupNewName: document.getElementById("skillDupNewName"),
+  skillDupResolve: document.getElementById("skillDupResolve"),
+  skillDupError: document.getElementById("skillDupError"),
+  skillDupPreview: document.getElementById("skillDupPreview"),
+  skillDupBody: document.getElementById("skillDupBody"),
+  skillDupApply: document.getElementById("skillDupApply"),
+  skillDupCancel: document.getElementById("skillDupCancel"),
+  skillDupClose: document.getElementById("skillDupClose"),
   toast: document.getElementById("toast"),
   contextMenu: document.getElementById("contextMenu"),
   closeDialog: document.getElementById("closeDialog"),
@@ -349,7 +363,9 @@ const commandLabelsBase = [
   ["toggle-sidebar", "Toggle Explorer"],
   ["toggle-theme", "Toggle Light/Dark Mode"],
   ["open-app-settings", "Settings"],
-  ["open-settings", "Lint Options"]
+  ["open-settings", "Lint Options"],
+  ["duplicate-skill", "Duplicate Skill"],
+  ["duplicate-missile", "Duplicate Missile"]
 ];
 
 const commandLabels = [
@@ -840,6 +856,14 @@ function wireEvents() {
     }
     if (event.key === "Escape") els.palette.classList.add("hidden");
   });
+  els.skillDupClose.addEventListener("click", closeSkillDupDialog);
+  els.skillDupCancel.addEventListener("click", closeSkillDupDialog);
+  els.skillDupResolve.addEventListener("click", skillDupResolve);
+  els.skillDupModeSkill.addEventListener("click", () => setSkillDupMode("skill"));
+  els.skillDupModeMissile.addEventListener("click", () => setSkillDupMode("missile"));
+  els.skillDupApply.addEventListener("click", skillDupApply);
+  els.skillDupSource.addEventListener("keydown", (event) => { if (event.key === "Enter") skillDupResolve(); });
+  els.skillDupNewName.addEventListener("keydown", (event) => { if (event.key === "Enter") skillDupResolve(); });
   els.columnSearchClose.addEventListener("click", closeColumnSearch);
   els.columnSearchInput.addEventListener("input", () => renderColumnSearchResults(els.columnSearchInput.value));
   els.columnSearchInput.addEventListener("keydown", (event) => {
@@ -1239,6 +1263,26 @@ function runCommand(id) {
   if (id === "open-app-settings") return showAppSettings();
   if (id === "open-settings") return showSettings();
   if (id === "go-to-definition") return goToDefinition();
+  if (id === "duplicate-skill") {
+    const hitRow = state.contextHit?.row;
+    if (hitRow != null && hitRow > 0 && /^skills\.txt$/i.test(doc.name)) {
+      const skillColIdx = Array.from({ length: doc.columnCount }, (_, c) => c)
+        .find((c) => doc.getCell(0, c).toLowerCase() === "skill");
+      const prefill = skillColIdx != null ? doc.getCell(hitRow, skillColIdx) : null;
+      return showSkillDupDialog("skill", prefill || null);
+    }
+    return showSkillDupDialog("skill");
+  }
+  if (id === "duplicate-missile") {
+    const hitRow = state.contextHit?.row;
+    if (hitRow != null && hitRow > 0 && /^missiles\.txt$/i.test(doc.name)) {
+      const missileColIdx = Array.from({ length: doc.columnCount }, (_, c) => c)
+        .find((c) => doc.getCell(0, c).toLowerCase() === "missile");
+      const prefill = missileColIdx != null ? doc.getCell(hitRow, missileColIdx) : null;
+      return showSkillDupDialog("missile", prefill || null);
+    }
+    return showSkillDupDialog("missile");
+  }
 }
 
 async function copySelection() {
@@ -3418,6 +3462,200 @@ function jumpToColumn(col) {
   grid.draw();
 }
 
+// ---------------------------------------------------------------------------
+// Skill duplication dialog
+// ---------------------------------------------------------------------------
+
+let _skillDupChangeset = null;
+let _skillDupMode = "skill"; // "skill" | "missile"
+
+function setSkillDupMode(mode) {
+  _skillDupMode = mode;
+  els.skillDupModeSkill.classList.toggle("active", mode === "skill");
+  els.skillDupModeMissile.classList.toggle("active", mode === "missile");
+  els.skillDupSourceLabel.textContent = mode === "skill" ? "Source skill" : "Source missile";
+  els.skillDupError.classList.add("hidden");
+  els.skillDupPreview.classList.add("hidden");
+  _skillDupChangeset = null;
+  els.skillDupSource.value = "";
+  els.skillDupNewName.value = "";
+  els.skillDupSource.focus();
+}
+
+function showSkillDupDialog(mode = "skill", prefill = null) {
+  els.skillDupDialog.classList.remove("hidden");
+  els.skillDupError.classList.add("hidden");
+  els.skillDupPreview.classList.add("hidden");
+  _skillDupChangeset = null;
+
+  _skillDupMode = mode;
+  els.skillDupModeSkill.classList.toggle("active", mode === "skill");
+  els.skillDupModeMissile.classList.toggle("active", mode === "missile");
+  els.skillDupSourceLabel.textContent = mode === "skill" ? "Source skill" : "Source missile";
+
+  if (prefill != null) {
+    els.skillDupSource.value = prefill;
+  } else {
+    const doc = activeDoc();
+    const colName = mode === "skill" ? "skill" : "missile";
+    const isMatchingDoc = mode === "skill"
+      ? doc && /^skills\.txt$/i.test(doc.name)
+      : doc && /^missiles\.txt$/i.test(doc.name);
+    if (isMatchingDoc) {
+      const row = state.selection.focus?.row ?? state.selection.anchor?.row;
+      if (row != null && row > 0) {
+        const colIdx = Array.from({ length: doc.columnCount }, (_, c) => c)
+          .find((c) => doc.getCell(0, c).toLowerCase() === colName);
+        if (colIdx != null) els.skillDupSource.value = doc.getCell(row, colIdx);
+      }
+    }
+  }
+  els.skillDupSource.focus();
+}
+
+function closeSkillDupDialog() {
+  els.skillDupDialog.classList.add("hidden");
+  _skillDupChangeset = null;
+}
+
+function _findDocByName(name) {
+  return state.docs.find((d) => d.name.toLowerCase() === name.toLowerCase()) ?? null;
+}
+
+async function _ensureDoc(filename) {
+  const existing = _findDocByName(filename);
+  if (existing) return existing;
+  if (!state.workspace) return null;
+  const candidate = state.workspace.files?.find((f) => f.name.toLowerCase() === filename.toLowerCase());
+  if (!candidate) return null;
+  const [file] = await readRawTextFiles([candidate.path]).catch(() => []);
+  if (!file?.text) return null;
+  const doc = TableDocument.fromText(candidate.name, file.text, { path: candidate.path, dirty: false });
+  await addDocument(doc);
+  return doc;
+}
+
+function skillDupResolve() {
+  const sourceName = els.skillDupSource.value.trim();
+  const newName    = els.skillDupNewName.value.trim();
+  els.skillDupError.classList.add("hidden");
+  els.skillDupPreview.classList.add("hidden");
+
+  const isMissileMode = _skillDupMode === "missile";
+  if (!sourceName) { _skillDupShowError(`Enter a source ${isMissileMode ? "missile" : "skill"} name.`); return; }
+  if (!newName)    { _skillDupShowError(`Enter a new ${isMissileMode ? "missile" : "skill"} name.`); return; }
+
+  if (isMissileMode) {
+    _ensureDoc("Missiles.txt").then((missilesDoc) => {
+      if (!missilesDoc) { _skillDupShowError("Missiles.txt is not open and could not be found in the workspace."); return; }
+      const result = resolveMissileDuplicate(missilesDoc, sourceName, newName);
+      if (result.error) { _skillDupShowError(result.error); return; }
+      _skillDupChangeset = result;
+      _skillDupRenderPreview(result);
+    }).catch((err) => _skillDupShowError(String(err)));
+  } else {
+    _ensureDoc("Skills.txt").then((skillsDoc) => {
+      if (!skillsDoc) { _skillDupShowError("Skills.txt is not open and could not be found in the workspace."); return; }
+      _ensureDoc("Missiles.txt").then((missilesDoc) => {
+        if (!missilesDoc) { _skillDupShowError("Missiles.txt is not open and could not be found in the workspace."); return; }
+        const result = resolveSkillDuplicate(skillsDoc, missilesDoc, sourceName, newName);
+        if (result.error) { _skillDupShowError(result.error); return; }
+        _skillDupChangeset = result;
+        _skillDupRenderPreview(result);
+      }).catch((err) => _skillDupShowError(String(err)));
+    }).catch((err) => _skillDupShowError(String(err)));
+  }
+}
+
+function _skillDupShowError(msg) {
+  els.skillDupError.textContent = msg;
+  els.skillDupError.classList.remove("hidden");
+}
+
+function _skillDupRenderPreview(changeset) {
+  const rows = [];
+  if (changeset.skill) rows.push({ kind: "skill", entry: changeset.skill });
+  for (const m of changeset.missiles) rows.push({ kind: "missile", entry: m });
+
+  els.skillDupBody.innerHTML = rows.map(({ kind, entry }, i) => {
+    const rowClass  = kind === "skill" ? " class=\"skill-row\"" : "";
+    const targetVal = entry.targetRow >= 0 ? String(entry.targetRow) : "";
+    const origCol   = kind === "skill" ? "" : escapeHtml(entry.originalName);
+    return `<tr${rowClass} data-kind="${kind}" data-index="${i}">
+      <td>${kind}</td>
+      <td>${origCol}</td>
+      <td><input type="text" value="${escapeHtml(entry.newName)}" data-field="newName" /></td>
+      <td class="row-num"><input type="text" value="${escapeHtml(targetVal)}" placeholder="append" data-field="targetRow" /></td>
+    </tr>`;
+  }).join("");
+
+  for (const tr of els.skillDupBody.querySelectorAll("tr")) {
+    const kind  = tr.dataset.kind;
+    const index = Number(tr.dataset.index);
+    const entry = kind === "skill" ? changeset.skill : changeset.missiles[changeset.skill ? index - 1 : index];
+    for (const input of tr.querySelectorAll("input")) {
+      input.addEventListener("input", () => {
+        if (input.dataset.field === "newName") entry.newName = input.value;
+        else { const v = parseInt(input.value, 10); entry.targetRow = isNaN(v) ? -1 : v; }
+      });
+    }
+  }
+
+  els.skillDupPreview.classList.remove("hidden");
+}
+
+function skillDupApply() {
+  if (!_skillDupChangeset) return;
+  const changeset = _skillDupChangeset;
+  const isMissileMode = _skillDupMode === "missile";
+
+  const missilesDoc = _findDocByName("Missiles.txt");
+  if (!missilesDoc) { _skillDupShowError("Missiles.txt is no longer open."); return; }
+
+  const remap = buildMissileRemap(changeset);
+  const label = isMissileMode ? "Duplicate Missile" : "Duplicate Skill";
+
+  for (const entry of changeset.missiles) {
+    const origSkill = isMissileMode ? null : changeset.skill.originalName;
+    const newSkill  = isMissileMode ? null : changeset.skill.newName;
+    const values = buildMissileValues(missilesDoc, entry, remap, origSkill, newSkill);
+    _applyRowWrite(missilesDoc, entry.targetRow, values, `${label} - Missile`);
+  }
+
+  if (!isMissileMode) {
+    const skillsDoc = _findDocByName("Skills.txt");
+    if (!skillsDoc) { _skillDupShowError("Skills.txt is no longer open."); return; }
+    const skillValues = buildSkillValues(skillsDoc, changeset.skill, remap);
+    _applyRowWrite(skillsDoc, changeset.skill.targetRow, skillValues, label);
+  }
+
+  const origName = isMissileMode ? changeset.missiles.at(-1)?.originalName : changeset.skill.originalName;
+  const newName  = isMissileMode ? changeset.missiles.at(-1)?.newName      : changeset.skill.newName;
+  closeSkillDupDialog();
+  grid.draw();
+  renderChrome();
+  showToast(`Duplicated "${origName}" → "${newName}"`);
+}
+
+function _applyRowWrite(doc, targetRow, values, label) {
+  if (targetRow >= 1 && targetRow < doc.rowCount) {
+    // Overwrite existing row in-place
+    const edits = values.map((value, column) => ({ row: targetRow, column, value }));
+    const cmd = makeCellCommand(label, doc, edits);
+    doc.undo.push(cmd);
+    cmd.redo(doc);
+  } else {
+    // Append as new row
+    const at = doc.rowCount;
+    const cmd = makeCustomCommand(label, {
+      redo(target) { target.insertRow(at, values); },
+      undo(target) { target.deleteRows(at, 1); },
+    });
+    doc.undo.push(cmd);
+    cmd.redo(doc);
+  }
+}
+
 function showPalette() {
   hideContextMenu();
   els.palette.classList.remove("hidden");
@@ -3445,8 +3683,13 @@ function showContextMenu({ x, y, hit }) {
   const canUnhide = activeDoc().hiddenRows.size > 0 || activeDoc().hiddenColumns.size > 0;
   const focusRow = hit?.row ?? state.selection.focus.row;
   const focusCol = hit?.column ?? state.selection.focus.column;
+  const doc = activeDoc();
+  const isSkillsDoc   = doc && /^skills\.txt$/i.test(doc.name);
+  const isMissilesDoc = doc && /^missiles\.txt$/i.test(doc.name);
   const entries = [
     { id: "go-to-definition", label: "Go To Definition", disabled: !cellHasReference(focusRow, focusCol) },
+    { id: "duplicate-skill",   label: "Duplicate Skill",   disabled: !isSkillsDoc   || focusRow < 1 },
+    { id: "duplicate-missile", label: "Duplicate Missile", disabled: !isMissilesDoc || focusRow < 1 },
     { type: "submenu", label: "Column Operations", items: colItems() },
     { type: "submenu", label: "Row Operations", items: rowItems() },
     { id: "resize-fit", label: "Resize To Fit" },
@@ -3464,6 +3707,11 @@ function showContextMenu({ x, y, hit }) {
       Promise.resolve(runCommand(button.dataset.run)).catch(showError);
       hideContextMenu();
     });
+    if (!button.closest(".menu-group")) {
+      button.addEventListener("mouseenter", () => {
+        for (const g of els.contextMenu.querySelectorAll(".menu-group.active")) g.classList.remove("active");
+      });
+    }
   }
   for (const group of els.contextMenu.querySelectorAll(".menu-group")) {
     const activate = () => openContextSubmenu(group);

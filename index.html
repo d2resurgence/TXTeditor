@@ -96,6 +96,41 @@
       <div id="columnSearchResults" class="column-search-results"></div>
     </div>
 
+    <div id="skillDupDialog" class="skill-dup-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="skillDupTitle">
+      <div class="skill-dup-panel">
+        <div class="skill-dup-head">
+          <span id="skillDupTitle">Duplicate</span>
+          <div class="skill-dup-mode">
+            <button id="skillDupModeSkill" class="active" type="button">Skill</button>
+            <button id="skillDupModeMissile" type="button">Missile</button>
+          </div>
+          <button id="skillDupClose" type="button" aria-label="Close">&#x2715;</button>
+        </div>
+        <div class="skill-dup-form">
+          <div class="skill-dup-field">
+            <label id="skillDupSourceLabel" for="skillDupSource">Source skill</label>
+            <input id="skillDupSource" type="text" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="skill-dup-field">
+            <label for="skillDupNewName">New name</label>
+            <input id="skillDupNewName" type="text" autocomplete="off" spellcheck="false" />
+          </div>
+          <button id="skillDupResolve" type="button">Resolve</button>
+        </div>
+        <div id="skillDupError" class="skill-dup-error hidden"></div>
+        <div id="skillDupPreview" class="hidden">
+          <table class="skill-dup-table">
+            <thead><tr><th>Type</th><th>Original</th><th>New Name</th><th>Target Row</th></tr></thead>
+            <tbody id="skillDupBody"></tbody>
+          </table>
+          <div class="skill-dup-footer">
+            <button id="skillDupApply" type="button">Apply</button>
+            <button id="skillDupCancel" type="button">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="toast" class="toast hidden"></div>
     <div id="contextMenu" class="context-menu hidden"></div>
     <div id="closeDialog" class="modal-backdrop hidden">
