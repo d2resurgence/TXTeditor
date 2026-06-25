@@ -390,7 +390,7 @@ button.active {
   min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-rows: 34px auto 1fr;
+  grid-template-rows: 34px auto auto 1fr;
   transition: width .12s ease;
   position: relative;
 }
@@ -460,6 +460,27 @@ button.active {
   grid-template-columns: 1fr 1fr;
   gap: 6px;
   padding: 8px;
+}
+
+.sidebar-file-search {
+  padding: 0 8px 6px;
+}
+
+.sidebar-file-search input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 26px;
+  padding: 0 8px;
+  background: var(--input-bg, var(--surface-2));
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+
+.sidebar-file-search input:focus {
+  border-color: var(--accent);
 }
 
 .sidebar-actions button,
@@ -1225,9 +1246,6 @@ details:not([open]) .problem-file-header::before {
 .column-search {
   position: fixed;
   z-index: 20;
-  left: 50%;
-  top: 64px;
-  transform: translateX(-50%);
   width: min(240px, calc(100vw - 32px));
   background: var(--surface-3);
   border: 1px solid var(--line);

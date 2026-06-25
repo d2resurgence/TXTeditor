@@ -24,6 +24,9 @@
               <button data-command="open-file">Open File</button>
               <button data-command="open-folder">Open Folder</button>
             </div>
+            <div class="sidebar-file-search">
+              <input id="fileSearch" type="text" placeholder="Filter files…" autocomplete="off" spellcheck="false" />
+            </div>
             <div id="fileList" class="file-list"></div>
           </aside>
         </section>
@@ -33,12 +36,14 @@
           <section class="toolbar">
             <button data-command="open-file">Open</button>
             <button data-command="save-file">Save</button>
+            <button data-command="save-all">Save All</button>
             <button data-command="save-as">Save As</button>
             <button data-command="undo">Undo</button>
             <button data-command="redo">Redo</button>
             <button data-command="search">Find</button>
             <button class="toggle-button" data-command="toggle-freeze-row">Freeze Row</button>
             <button class="toggle-button" data-command="toggle-freeze-column">Freeze Column</button>
+            <button data-command="show-column-search">Go to Column</button>
             <button data-command="open-app-settings">Settings</button>
           </section>
           <section id="gridHost" class="grid-host" tabindex="0" aria-label="Virtual table editor">

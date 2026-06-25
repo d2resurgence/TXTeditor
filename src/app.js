@@ -191,7 +191,8 @@ const state = {
   selection: new SelectionModel(),
   workspace: null,
   search: {
-    lastQuery: ""
+    lastQuery: "",
+    firstColumnOnly: false,
   },
   sidebarVisible: localStorage.getItem("txteditor.sidebar") !== "hidden",
   sidebarWidth: savedSidebarWidth,
@@ -267,6 +268,7 @@ const els = {
   tabs: document.getElementById("tabs"),
   emptyState: document.getElementById("emptyState"),
   fileList: document.getElementById("fileList"),
+  fileSearch: document.getElementById("fileSearch"),
   fileInput: document.getElementById("hiddenFileInput"),
   fontSelect: document.getElementById("fontSelect"),
   lintControls: document.getElementById("lintControls"),
@@ -275,6 +277,7 @@ const els = {
   searchPanel: document.getElementById("searchPanel"),
   searchInput: document.getElementById("searchInput"),
   searchStatus: document.getElementById("searchStatus"),
+  searchTitle: document.getElementById("searchTitle"),
   palette: document.getElementById("palette"),
   paletteInput: document.getElementById("paletteInput"),
   paletteResults: document.getElementById("paletteResults"),
@@ -318,8 +321,11 @@ const commandLabelsBase = [
   ["open-file", "Open File"],
   ["open-folder", "Open Folder / Workspace"],
   ["save-file", "Save"],
+  ["save-all", "Save All"],
   ["save-as", "Save As"],
   ["search", "Find/Search"],
+  ["search-column1", "Find in First Column"],
+  ["show-column-search", "Go to Column"],
   ["find-next", "Find Next"],
   ["undo", "Undo"],
   ["redo", "Redo"],
@@ -865,6 +871,14 @@ function wireEvents() {
   els.skillDupSource.addEventListener("keydown", (event) => { if (event.key === "Enter") skillDupResolve(); });
   els.skillDupNewName.addEventListener("keydown", (event) => { if (event.key === "Enter") skillDupResolve(); });
   els.columnSearchClose.addEventListener("click", closeColumnSearch);
+  els.fileSearch.addEventListener("input", () => applyFileSearch());
+  document.addEventListener("mousedown", (event) => {
+    if (!els.columnSearch.classList.contains("hidden") &&
+        !els.columnSearch.contains(event.target) &&
+        !event.target.closest('[data-command="show-column-search"]')) {
+      closeColumnSearch();
+    }
+  });
   els.columnSearchInput.addEventListener("input", () => renderColumnSearchResults(els.columnSearchInput.value));
   els.columnSearchInput.addEventListener("keydown", (event) => {
     if (event.key === "Escape") { event.preventDefault(); closeColumnSearch(); return; }
@@ -951,9 +965,11 @@ function handleGlobalKeydown(event) {
   if (event.ctrlKey && key === "b") return prevent(event, toggleSidebar);
   if (event.ctrlKey && key === "l") return prevent(event, toggleProblemsPanel);
   if (event.ctrlKey && key === "h") return prevent(event, resetRowHeights);
-  if (event.ctrlKey && key === "s" && event.shiftKey) return prevent(event, saveAs);
+  if (event.ctrlKey && key === "s" && event.shiftKey) return prevent(event, saveAll);
+  if (event.ctrlKey && key === "s" && event.altKey) return prevent(event, saveAs);
   if (event.ctrlKey && key === "s") return prevent(event, saveFile);
-  if (event.ctrlKey && key === "f") return prevent(event, showSearch);
+  if (event.ctrlKey && key === "f" && event.shiftKey) return prevent(event, () => showSearch(true));
+  if (event.ctrlKey && key === "f") return prevent(event, () => showSearch(false));
   if (event.ctrlKey && key === "z" && event.shiftKey) return prevent(event, redo);
   if (event.ctrlKey && key === "z") return prevent(event, undo);
   if (event.ctrlKey && key === "y") return prevent(event, redo);
@@ -1151,6 +1167,26 @@ async function saveAs() {
   }
 }
 
+async function saveAll() {
+  if (!hasOpenDocument()) return;
+  const prev = state.active;
+  let saved = 0;
+  let failed = 0;
+  for (let i = 0; i < state.docs.length; i++) {
+    if (!state.docs[i].dirty) continue;
+    state.active = i;
+    const ok = await saveFile().catch(() => false);
+    if (ok) saved++;
+    else failed++;
+  }
+  state.active = prev;
+  grid.setDocument(activeDoc());
+  grid.draw();
+  renderChrome();
+  if (failed > 0) showError(`${failed} file(s) could not be saved.`);
+  else if (saved > 0) showToast(`Saved ${saved} file(s).`);
+}
+
 async function loadFixture(size) {
   const name = size === 200000 ? "d2_200k.tsv" : "d2_20k.tsv";
   const response = await fetch(`./fixtures/${name}`);
@@ -1180,7 +1216,16 @@ function redo() {
   }
 }
 
-function showSearch() {
+function showSearch(firstColumnOnly = false) {
+  state.search.firstColumnOnly = firstColumnOnly;
+  state.search.lastQuery = "";
+  if (firstColumnOnly) {
+    els.searchTitle.textContent = "Find in First Column";
+    els.searchInput.placeholder = "Search in first column";
+  } else {
+    els.searchTitle.textContent = "Find";
+    els.searchInput.placeholder = "Search in current table";
+  }
   els.searchPanel.classList.remove("hidden");
   els.searchInput.focus();
   els.searchInput.select();
@@ -1194,7 +1239,9 @@ function closeSearch() {
 function findNext() {
   const query = els.searchInput.value;
   const includeStart = query !== state.search.lastQuery;
-  const found = findInTable(activeDoc(), query, state.selection.focus, { includeStart });
+  const opts = { includeStart };
+  if (state.search.firstColumnOnly) opts.onlyColumn = 0;
+  const found = findInTable(activeDoc(), query, state.selection.focus, opts);
   if (!found) {
     els.searchStatus.textContent = "No results";
     return;
@@ -1215,12 +1262,15 @@ function runCommand(id) {
   if (id === "open-file") return openFile();
   if (id === "open-folder") return openFolder();
   if (id === "save-file") return saveFile();
+  if (id === "save-all") return saveAll();
   if (id === "save-as") return saveAs();
   if (id === "load-fixture-20k") return loadFixture(20000);
   if (id === "load-fixture-200k") return loadFixture(200000);
   if (id === "undo") return undo();
   if (id === "redo") return redo();
-  if (id === "search") return showSearch();
+  if (id === "search") return showSearch(false);
+  if (id === "search-column1") return showSearch(true);
+  if (id === "show-column-search") return showColumnSearch();
   if (id === "find-next") return findNext();
   if (id === "copy") return copySelection();
   if (id === "paste") return pasteSelection();
@@ -3423,6 +3473,13 @@ function toggleSidebar() {
 
 function showColumnSearch() {
   if (!hasOpenDocument()) return;
+  if (!els.columnSearch.classList.contains("hidden")) { closeColumnSearch(); return; }
+  const btn = document.querySelector('[data-command="show-column-search"]');
+  if (btn) {
+    const rect = btn.getBoundingClientRect();
+    els.columnSearch.style.left = `${rect.left}px`;
+    els.columnSearch.style.top = `${rect.bottom + 4}px`;
+  }
   els.columnSearch.classList.remove("hidden");
   els.columnSearchInput.value = "";
   renderColumnSearchResults("");
@@ -3973,6 +4030,7 @@ function renderChrome() {
     .map((doc, index) => `<button class="${index === state.active ? "active" : ""}" data-tab="${index}">${escapeHtml(doc.name)}${problemBadgeForPath(doc.path || doc.name)}</button>`)
     .join("") + (workspaceFiles ? `<div class="separator"></div>${workspaceFiles}` : "");
   els.fileList.scrollTop = fileListScroll;
+  applyFileSearch();
   renderProblemsPanelIfNeeded();
   for (const button of document.querySelectorAll("[data-tab]")) {
     button.addEventListener("click", (event) => {
@@ -4230,6 +4288,20 @@ function isTextInputTarget(target) {
 
 function isTextLikeFile(file) {
   return isTextLikePath(file.name);
+}
+
+function applyFileSearch() {
+  const q = els.fileSearch.value.trim().toLowerCase();
+  for (const btn of els.fileList.querySelectorAll("button[data-tab], button[data-open-path]")) {
+    const name = btn.dataset.tab != null
+      ? (state.docs[parseInt(btn.dataset.tab)]?.name ?? "")
+      : (btn.dataset.openPath.split(/[\\/]/).pop());
+    btn.style.display = (!q || name.toLowerCase().includes(q)) ? "" : "none";
+  }
+  for (const group of els.fileList.querySelectorAll("details[data-file-group]")) {
+    const anyVisible = [...group.querySelectorAll("button[data-open-path]")].some(b => b.style.display !== "none");
+    group.style.display = anyVisible ? "" : "none";
+  }
 }
 
 function renderWorkspaceFileList(docs) {
