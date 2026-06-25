@@ -14,6 +14,17 @@ use tokio::sync::oneshot;
 
 // ── app configuration ──────────────────────────────────────────────────────
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(untagged)]
+enum AutofitEntry {
+    All(bool),
+    Columns(Vec<String>),
+}
+
+impl Default for AutofitEntry {
+    fn default() -> Self { AutofitEntry::Columns(Vec::new()) }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 struct AppConfig {
@@ -33,8 +44,8 @@ struct AppConfig {
     lsp_preload_enabled: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     lsp_preload_skip: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    autofit_columns: Vec<String>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    autofit_columns: HashMap<String, AutofitEntry>,
 }
 
 struct AppConfigState {

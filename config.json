@@ -9,8 +9,9 @@
     "SkillCalc", "SoundEnviron", "Sounds", "StorePage", "UniqueAppellation",
     "UniquePrefix", "UniqueSuffix", "UniqueTitle", "WeaponClass"
   ],
-  "autofitColumns": [
-    "skilldesc", "*comment", "srvmissile",
-    "BaseId", "NextInClass", "NameStr"
-  ]
+  "autofitColumns": {
+    "*": true,
+    "Skills": ["skilldesc", "srvmissile"],
+    "MonStats": ["BaseId", "NextInClass", "NameStr"]
+  }
 }

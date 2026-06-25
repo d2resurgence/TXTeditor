@@ -902,10 +902,22 @@ async function addDocument(doc) {
   grid.setDocument(doc);
   if (!doc.initialColumnFitApplied) {
     grid.autoFitInitialColumns();
-    const autofitSet = new Set((state.config.autofitColumns ?? []).map((c) => c.toLowerCase()));
-    const fitCols = new Set([0]);
-    for (let col = 1; col < doc.columnCount; col++) {
-      if (autofitSet.has((doc.getCell(0, col) ?? "").toLowerCase())) fitCols.add(col);
+    const autofitMap = state.config.autofitColumns ?? {};
+    const fileBase = doc.name.replace(/\.[^.]+$/, "").toLowerCase();
+    const fileEntry = Object.entries(autofitMap).find(([k]) => k !== "*" && k.toLowerCase() === fileBase)?.[1];
+    const globalEntry = autofitMap["*"];
+    const fitAll = globalEntry === true || fileEntry === true;
+    const fitCols = new Set(fitAll
+      ? Array.from({ length: doc.columnCount }, (_, i) => i)
+      : [0]);
+    if (!fitAll) {
+      const autofitSet = new Set([
+        ...(Array.isArray(globalEntry) ? globalEntry : []).map((c) => c.toLowerCase()),
+        ...(Array.isArray(fileEntry) ? fileEntry : []).map((c) => c.toLowerCase()),
+      ]);
+      for (let col = 1; col < doc.columnCount; col++) {
+        if (autofitSet.has((doc.getCell(0, col) ?? "").toLowerCase())) fitCols.add(col);
+      }
     }
     const wasDirty = doc.dirty;
     const widths = await Promise.all([...fitCols].map((col) => grid.measureColumnFitWidth(col, { yieldEvery: 0 })));
