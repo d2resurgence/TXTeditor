@@ -902,6 +902,15 @@ async function addDocument(doc) {
   grid.setDocument(doc);
   if (!doc.initialColumnFitApplied) {
     grid.autoFitInitialColumns();
+    const autofitSet = new Set((state.config.autofitColumns ?? []).map((c) => c.toLowerCase()));
+    const fitCols = new Set([0]);
+    for (let col = 1; col < doc.columnCount; col++) {
+      if (autofitSet.has((doc.getCell(0, col) ?? "").toLowerCase())) fitCols.add(col);
+    }
+    const wasDirty = doc.dirty;
+    const widths = await Promise.all([...fitCols].map((col) => grid.measureColumnFitWidth(col, { yieldEvery: 0 })));
+    [...fitCols].forEach((col, i) => doc.setColumnWidth(col, widths[i]));
+    doc.dirty = wasDirty;
     doc.initialColumnFitApplied = true;
     grid.layout();
   }
@@ -1969,19 +1978,6 @@ function markDocHoverReady(doc, uri, reason) {
   if (doc === activeDoc()) scheduleHoverPrewarm(`hover-ready:${reason}`);
 }
 
-const LSP_PRELOAD_SKIP = new Set([
-  "aiparms", "animdata", "arena", "automap", "chartemplate", "composit",
-  "compcode", "cubemod", "cubetype", "elemtypes", "hitclass", "misscalc",
-  "monai", "monmode", "monname", "objgroup", "objmode", "skillcalc",
-  "soundenviron", "sounds", "storepage", "uniqueappellation", "uniqueprefix",
-  "uniquesuffix", "uniquetitle", "weaponclass",
-]);
-
-function lspPreloadSkipped(filePath) {
-  const base = filePath.split(/[\\/]/).pop().replace(/\.[^.]+$/, "").toLowerCase();
-  return LSP_PRELOAD_SKIP.has(base) || base.startsWith("cubemain");
-}
-
 async function lspStartWorkspace(workspacePath) {
   if (!isVectorLintEngine()) {
     recordLintEngineEvent("vector-start-skipped", { workspacePath });
@@ -2013,11 +2009,17 @@ async function lspStartWorkspace(workspacePath) {
   renderChrome();
   retryQueuedLspHover("workspace-ready");
   scheduleHoverPrewarm("workspace-ready");
-  if (state.workspace?.files?.length) {
+  if (state.config.lspPreloadEnabled && state.workspace?.files?.length) {
     const openPaths = new Set(docsWithPaths.map((d) => d.path));
     const unopenedPaths = state.workspace.files
       .map((f) => f.path)
-      .filter((p) => !openPaths.has(p) && !p.toLowerCase().endsWith(".tbl") && !lspPreloadSkipped(p));
+      .filter((p) => {
+        if (openPaths.has(p) || p.toLowerCase().endsWith(".tbl")) return false;
+        const skip = state.config.lspPreloadSkip;
+        if (!skip?.length) return true;
+        const base = p.split(/[\\/]/).pop().replace(/\.[^.]+$/, "").toLowerCase();
+        return !skip.some((entry) => base === entry.toLowerCase());
+      });
     if (unopenedPaths.length) {
       showPersistentToast(`Loading workspace files…`);
       (async () => {

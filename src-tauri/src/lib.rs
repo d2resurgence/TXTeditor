@@ -29,6 +29,12 @@ struct AppConfig {
     plugin_path: Option<String>,
     #[serde(default)]
     debug_logging: bool,
+    #[serde(default)]
+    lsp_preload_enabled: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    lsp_preload_skip: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    autofit_columns: Vec<String>,
 }
 
 struct AppConfigState {
@@ -851,10 +857,30 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(LspManager::new())
         .setup(|app| {
-            let config_dir = app.path().app_config_dir()
-                .unwrap_or_else(|_| PathBuf::from("."));
-            let _ = fs::create_dir_all(&config_dir);
-            let config_path = config_dir.join("config.json");
+            // Search for config.json in order:
+            //   1. beside the executable (reliable in production)
+            //   2. current working directory (project root in some setups)
+            //   3. 3 dirs above the exe (dev: src-tauri/target/debug/ -> project root)
+            //   4. AppData (backwards-compatible fallback)
+            let appdata_config = app.path().app_config_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join("config.json");
+            let config_path = [
+                std::env::current_exe().ok()
+                    .and_then(|exe| exe.parent().map(|p| p.join("config.json"))),
+                std::env::current_dir().ok()
+                    .map(|d| d.join("config.json")),
+                std::env::current_exe().ok()
+                    .and_then(|exe| {
+                        let mut p = exe.as_path();
+                        for _ in 0..4 { p = p.parent()?; }
+                        Some(p.join("config.json"))
+                    }),
+            ]
+            .into_iter()
+            .flatten()
+            .find(|p| p.exists())
+            .unwrap_or(appdata_config);
             let config = load_app_config_from(&config_path);
             app.manage(AppConfigState {
                 config: Mutex::new(config),

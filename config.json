@@ -1,0 +1,16 @@
+{
+  "vectorLspPath": "C:\\Resurgence\\Repository\\vector-lsp\\target\\release\\vector-lsp.exe",
+  "schemaVersion": "1.13",
+  "lspPreloadEnabled": true,
+  "lspPreloadSkip": [
+    "AiParms", "AnimData", "Arena", "AutoMap", "CharTemplate", "Composit",
+    "CompCode", "CubeMain", "CubeMod", "CubeType", "ElemTypes", "HitClass",
+    "MissCalc", "MonAi", "MonMode", "MonName", "ObjGroup", "ObjMode",
+    "SkillCalc", "SoundEnviron", "Sounds", "StorePage", "UniqueAppellation",
+    "UniquePrefix", "UniqueSuffix", "UniqueTitle", "WeaponClass"
+  ],
+  "autofitColumns": [
+    "skilldesc", "*comment", "srvmissile",
+    "BaseId", "NextInClass", "NameStr"
+  ]
+}
