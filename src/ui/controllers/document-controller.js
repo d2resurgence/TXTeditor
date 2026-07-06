@@ -34,6 +34,7 @@ export function createDocumentController({
   applyFreezeToDoc,
   renderChrome,
   showError,
+  showToast,
   reportWindowCloseFailure,
   lspOpenDoc,
   reportLspOpenFailure,
@@ -242,6 +243,30 @@ export function createDocumentController({
     return true;
   }
 
+  async function saveAll() {
+    if (!hasOpenDocument()) return;
+    commitActiveEdit();
+    const previous = state.active;
+    let saved = 0;
+    let failed = 0;
+    for (let i = 0; i < state.docs.length; i++) {
+      if (!state.docs[i].dirty) continue;
+      state.active = i;
+      applyFreezeToDoc(activeDoc());
+      grid.setDocument(activeDoc());
+      const ok = await saveFile().catch(() => false);
+      if (ok) saved++;
+      else failed++;
+    }
+    state.active = previous;
+    applyFreezeToDoc(activeDoc());
+    grid.setDocument(activeDoc());
+    grid.draw();
+    renderChrome();
+    if (failed > 0) showError(`${failed} file(s) could not be saved.`);
+    else if (saved > 0) showToast(`Saved ${saved} file(s).`);
+  }
+
   async function saveAs() {
     try {
       if (!hasOpenDocument()) {
@@ -389,6 +414,7 @@ export function createDocumentController({
     openDroppedNativePaths,
     openFile,
     openFolder,
+    saveAll,
     saveAs,
     saveFile,
     wireCloseHandler

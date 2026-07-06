@@ -229,6 +229,7 @@ test("command registry preserves public command labels and availability policy",
   assert.deepEqual(commandActionForId("math-add"), { type: "math", kind: "add" });
   assert.deepEqual(commandActionForId("toggle-freeze-row"), { type: "freeze", kind: "row" });
   assert.deepEqual(commandActionForId("resize-selected-fit"), { type: "resize", useSelection: true });
+  assert.deepEqual(commandActionForId("save-all"), { type: "handler", name: "saveAll" });
   assert.deepEqual(commandActionForId("go-to-definition"), { type: "handler", name: "goToDefinition" });
   assert.deepEqual(commandActionForId("missing-command"), { type: "unknown", id: "missing-command" });
 });
@@ -1116,6 +1117,9 @@ test("Ctrl+B, Ctrl+L, and Ctrl+H use the shared panel and row-height reset paths
   assert.equal(globalShortcutAction({ key: "Delete" }), "clear-selection");
   assert.equal(globalShortcutAction({ key: "b", ctrlKey: true }, { editingCell: true }), null);
   assert.equal(globalShortcutAction({ key: "h", ctrlKey: true }, { editingCell: true }), "reset-row-heights");
+  assert.equal(globalShortcutAction({ key: "s", ctrlKey: true, shiftKey: true }), "save-all");
+  assert.equal(globalShortcutAction({ key: "s", ctrlKey: true, altKey: true }), "save-as");
+  assert.equal(globalShortcutAction({ key: "s", ctrlKey: true }), "save-file");
   assert.equal(isEditorShortcutAllowed("h", true), true);
   assert.equal(isEditorShortcutAllowed("b", true), false);
   assert.equal(commandLabelsForEnvironment().some(([id, label]) => id === "reset-row-heights" && label === "Reset Row Heights"), true);

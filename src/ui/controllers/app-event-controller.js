@@ -23,6 +23,7 @@ export function createAppEventController({
   toggleSidebar,
   toggleProblemsPanel,
   resetRowHeights,
+  saveAll,
   saveAs,
   saveFile,
   redo,
@@ -111,6 +112,7 @@ export function createAppEventController({
     if (action === "toggle-sidebar") return prevent(event, toggleSidebar);
     if (action === "toggle-problems") return prevent(event, toggleProblemsPanel);
     if (action === "reset-row-heights") return prevent(event, resetRowHeights);
+    if (action === "save-all") return prevent(event, saveAll);
     if (action === "save-as") return prevent(event, saveAs);
     if (action === "save-file") return prevent(event, saveFile);
     if (action === "search") return prevent(event, searchController.showSearch);

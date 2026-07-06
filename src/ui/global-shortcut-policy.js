@@ -18,7 +18,8 @@ export function globalShortcutAction(event, { editingCell = false } = {}) {
   if (ctrlKey && key === "b") return "toggle-sidebar";
   if (ctrlKey && key === "l") return "toggle-problems";
   if (ctrlKey && key === "h") return "reset-row-heights";
-  if (ctrlKey && key === "s" && shiftKey) return "save-as";
+  if (ctrlKey && key === "s" && shiftKey) return "save-all";
+  if (ctrlKey && key === "s" && altKey) return "save-as";
   if (ctrlKey && key === "s") return "save-file";
   if (ctrlKey && key === "f") return "search";
   if (ctrlKey && key === "z" && shiftKey) return "redo";
