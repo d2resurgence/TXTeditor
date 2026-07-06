@@ -35,7 +35,20 @@ export const APP_ELEMENT_IDS = Object.freeze({
   contextMenu: "contextMenu",
   closeDialog: "closeDialog",
   closeDialogText: "closeDialogText",
-  overviewRuler: "overviewRuler"
+  overviewRuler: "overviewRuler",
+  skillDupDialog: "skillDupDialog",
+  skillDupModeSkill: "skillDupModeSkill",
+  skillDupModeMissile: "skillDupModeMissile",
+  skillDupSourceLabel: "skillDupSourceLabel",
+  skillDupSource: "skillDupSource",
+  skillDupNewName: "skillDupNewName",
+  skillDupResolve: "skillDupResolve",
+  skillDupError: "skillDupError",
+  skillDupPreview: "skillDupPreview",
+  skillDupBody: "skillDupBody",
+  skillDupApply: "skillDupApply",
+  skillDupCancel: "skillDupCancel",
+  skillDupClose: "skillDupClose"
 });
 
 export function collectAppElements(ownerDocument = document) {

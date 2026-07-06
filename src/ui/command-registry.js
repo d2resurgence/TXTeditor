@@ -47,7 +47,9 @@ export const COMMAND_LABELS_BASE = [
   ["toggle-sidebar", "Toggle Explorer"],
   ["toggle-theme", "Toggle Light/Dark Mode"],
   ["open-app-settings", "Settings"],
-  ["open-settings", "Lint Options"]
+  ["open-settings", "Lint Options"],
+  ["duplicate-skill", "Duplicate Skill"],
+  ["duplicate-missile", "Duplicate Missile"]
 ];
 
 export const DEVELOPMENT_COMMAND_LABELS = [
@@ -125,7 +127,9 @@ const COMMAND_ACTIONS = new Map([
   ["toggle-theme", { type: "handler", name: "toggleTheme" }],
   ["open-app-settings", { type: "handler", name: "showAppSettings" }],
   ["open-settings", { type: "handler", name: "showSettings" }],
-  ["go-to-definition", { type: "handler", name: "goToDefinition" }]
+  ["go-to-definition", { type: "handler", name: "goToDefinition" }],
+  ["duplicate-skill", { type: "handler", name: "duplicateSkill" }],
+  ["duplicate-missile", { type: "handler", name: "duplicateMissile" }]
 ]);
 
 export function commandLabelsForEnvironment({ isDevelopmentMode = false } = {}) {

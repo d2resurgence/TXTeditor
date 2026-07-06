@@ -22,7 +22,8 @@ export function createCommandSurfaceController({
   cellHasReference,
   clearVisibleLspHover,
   showError,
-  escapeHtml
+  escapeHtml,
+  extraContextMenuEntries = () => []
 }) {
   function showPalette() {
     hideContextMenu();
@@ -52,6 +53,7 @@ export function createCommandSurfaceController({
     const focusRow = hit?.row ?? state.selection.focus.row;
     const focusCol = hit?.column ?? state.selection.focus.column;
     const entries = [
+      ...extraContextMenuEntries({ focusRow, focusCol, doc: activeDoc() }),
       { type: "submenu", label: "Column Operations", items: columnCommandItems() },
       { type: "submenu", label: "Row Operations", items: rowItems() },
       { id: "resize-fit", label: "Resize To Fit" },
