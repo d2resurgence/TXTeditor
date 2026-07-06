@@ -6,19 +6,29 @@ import {
 } from "../core/search.js";
 
 export function initialSearchState() {
-  return { lastQuery: "", lastScope: SEARCH_SCOPE_ALL };
+  return { lastQuery: "", lastScope: SEARCH_SCOPE_ALL, firstColumnOnly: false };
 }
 
-export function searchStateAfterInput() {
-  return { lastQuery: "", lastScope: SEARCH_SCOPE_ALL };
+export function searchStateAfterInput(current = {}) {
+  return {
+    lastQuery: "",
+    lastScope: SEARCH_SCOPE_ALL,
+    firstColumnOnly: Boolean(current.firstColumnOnly)
+  };
 }
 
-export function searchStateAfterFind(query, scope = SEARCH_SCOPE_ALL) {
-  return { lastQuery: query, lastScope: normalizeSearchScope(scope) };
+export function searchStateAfterFind(query, scope = SEARCH_SCOPE_ALL, firstColumnOnly = false) {
+  return {
+    lastQuery: query,
+    lastScope: firstColumnOnly ? SEARCH_SCOPE_ALL : normalizeSearchScope(scope),
+    firstColumnOnly: Boolean(firstColumnOnly)
+  };
 }
 
-export function searchShouldIncludeStart(query, scope, lastQuery, lastScope = SEARCH_SCOPE_ALL) {
-  return query !== lastQuery || normalizeSearchScope(scope) !== normalizeSearchScope(lastScope);
+export function searchShouldIncludeStart(query, scope, lastQuery, lastScope = SEARCH_SCOPE_ALL, firstColumnOnly = false, lastFirstColumnOnly = false) {
+  return query !== lastQuery
+    || normalizeSearchScope(scope) !== normalizeSearchScope(lastScope)
+    || Boolean(firstColumnOnly) !== Boolean(lastFirstColumnOnly);
 }
 
 export function searchTargetForResult(scope, found, focus) {

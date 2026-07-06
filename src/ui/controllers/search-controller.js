@@ -1,4 +1,4 @@
-import { findInTable, normalizeSearchScope } from "../../core/search.js";
+import { findInTable, normalizeSearchScope, SEARCH_SCOPE_ALL } from "../../core/search.js";
 import {
   searchScrollOptionsForScope,
   searchShouldIncludeStart,
@@ -11,13 +11,32 @@ import {
 } from "../search-policy.js";
 
 export function createSearchController({ state, els, grid, activeDoc, updateActiveProblemHighlight, saveSelectionState = () => {} }) {
-  function showSearch() {
+  function resetSearchPanelUi() {
+    const scopeFieldset = els.searchPanel.querySelector(".search-scope");
+    if (scopeFieldset) scopeFieldset.classList.remove("hidden");
+    if (els.searchTitle) els.searchTitle.textContent = "Find";
+    els.searchInput.placeholder = "Search in current table";
+  }
+
+  function showSearch({ firstColumnOnly = false } = {}) {
+    state.search.firstColumnOnly = firstColumnOnly;
+    state.search.lastQuery = "";
+    const scopeFieldset = els.searchPanel.querySelector(".search-scope");
+    if (scopeFieldset) scopeFieldset.classList.toggle("hidden", firstColumnOnly);
+    if (firstColumnOnly) {
+      if (els.searchTitle) els.searchTitle.textContent = "Find in First Column";
+      els.searchInput.placeholder = "Search in first column";
+    } else {
+      resetSearchPanelUi();
+    }
     els.searchPanel.classList.remove("hidden");
     els.searchInput.focus();
     els.searchInput.select();
   }
 
   function closeSearch() {
+    state.search.firstColumnOnly = false;
+    resetSearchPanelUi();
     els.searchPanel.classList.add("hidden");
     els.host.focus();
   }
@@ -30,22 +49,36 @@ export function createSearchController({ state, els, grid, activeDoc, updateActi
 
   function findNext() {
     const query = els.searchInput.value;
-    const scope = selectedSearchScope();
-    const includeStart = searchShouldIncludeStart(query, scope, state.search.lastQuery, state.search.lastScope);
+    const firstColumnOnly = Boolean(state.search.firstColumnOnly);
+    const scope = firstColumnOnly ? SEARCH_SCOPE_ALL : selectedSearchScope();
+    const includeStart = searchShouldIncludeStart(
+      query,
+      scope,
+      state.search.lastQuery,
+      state.search.lastScope,
+      firstColumnOnly,
+      state.search.firstColumnOnly
+    );
     const focus = state.selection.focus;
-    const found = findInTable(activeDoc(), query, focus, { includeStart, scope });
+    const findOptions = { includeStart, scope };
+    if (firstColumnOnly) findOptions.onlyColumn = 0;
+    const found = findInTable(activeDoc(), query, focus, findOptions);
     if (!found) {
       els.searchStatus.textContent = "No results";
       return;
     }
-    const target = searchTargetForResult(scope, found, focus);
-    Object.assign(state.search, searchStateAfterFind(query, scope));
+    const target = firstColumnOnly
+      ? { row: found.row, column: found.column }
+      : searchTargetForResult(scope, found, focus);
+    Object.assign(state.search, searchStateAfterFind(query, scope, firstColumnOnly));
     state.selection.set(target.row, target.column);
     saveSelectionState();
     grid.scrollCellIntoView(target.row, target.column, searchScrollOptionsForScope(scope));
     grid.draw();
     updateActiveProblemHighlight();
-    els.searchStatus.textContent = searchStatusText(scope, found, target);
+    els.searchStatus.textContent = firstColumnOnly
+      ? `R${target.row + 1}:C${target.column + 1}`
+      : searchStatusText(scope, found, target);
   }
 
   function wireEvents() {
@@ -60,7 +93,7 @@ export function createSearchController({ state, els, grid, activeDoc, updateActi
       }
     });
     els.searchInput.addEventListener("input", () => {
-      Object.assign(state.search, searchStateAfterInput());
+      Object.assign(state.search, searchStateAfterInput(state.search));
     });
     els.searchPanel.querySelectorAll("input[name='searchScope']").forEach((input) => {
       input.addEventListener("keydown", (event) => {
@@ -69,7 +102,7 @@ export function createSearchController({ state, els, grid, activeDoc, updateActi
         findNext();
       });
       input.addEventListener("change", () => {
-        Object.assign(state.search, searchStateAfterInput());
+        Object.assign(state.search, searchStateAfterInput(state.search));
       });
     });
     els.searchPanel.addEventListener("click", (event) => {

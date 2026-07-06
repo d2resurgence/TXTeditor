@@ -48,6 +48,7 @@ import { createSettingsController } from "./ui/controllers/settings-controller.j
 import { createShellController } from "./ui/controllers/shell-controller.js";
 import { createStringGotoController } from "./ui/controllers/string-goto-controller.js";
 import { createSkillDupController } from "./ui/controllers/skill-dup-controller.js";
+import { createColumnSearchController } from "./ui/controllers/column-search-controller.js";
 const { state, savedTheme, savedGridFont, savedPanelState } = createInitialAppState({ storage: localStorage });
 const {
   uiPerfSamples,
@@ -289,6 +290,14 @@ const searchController = createSearchController({
   updateActiveProblemHighlight,
   saveSelectionState
 });
+const columnSearchController = createColumnSearchController({
+  state,
+  els,
+  grid,
+  activeDoc,
+  hasOpenDocument,
+  saveSelectionState
+});
 const editCommandController = createEditCommandController({
   state,
   grid,
@@ -330,6 +339,8 @@ const commandController = createCommandController({
     undo,
     redo,
     showSearch: searchController.showSearch,
+    showFirstColumnSearch: () => searchController.showSearch({ firstColumnOnly: true }),
+    showColumnSearch: columnSearchController.showColumnSearch,
     findNext: searchController.findNext,
     copySelection,
     pasteSelection,
@@ -437,6 +448,7 @@ skillDupController = createSkillDupController({
 skillDupBridge.runFromCommand = (commandId) => skillDupController.runFromCommand(commandId);
 skillDupBridge.contextMenuEntries = ({ focusRow, doc }) => skillDupController.contextMenuEntries({ focusRow, doc });
 skillDupController.wireEvents();
+columnSearchController.wireEvents();
 const eventController = createAppEventController({
   state,
   els,
@@ -444,6 +456,7 @@ const eventController = createAppEventController({
   commands,
   documentController,
   searchController,
+  columnSearchController,
   syncDockLayout,
   wirePaneResizers,
   positionContextMenu,

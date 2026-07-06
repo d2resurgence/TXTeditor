@@ -45,6 +45,7 @@
             <button data-command="search">Find</button>
             <button class="toggle-button" data-command="toggle-freeze-row">Freeze Row</button>
             <button class="toggle-button" data-command="toggle-freeze-column">Freeze Column</button>
+            <button data-command="show-column-search">Go to Column</button>
             <button data-command="open-app-settings">Settings</button>
           </section>
           <section id="gridHost" class="grid-host" tabindex="0" aria-label="Virtual table editor">
@@ -92,6 +93,14 @@
           <button data-search-close>Close</button>
         </div>
       </div>
+    </div>
+
+    <div id="columnSearch" class="column-search hidden">
+      <div class="column-search-header">
+        <input id="columnSearchInput" placeholder="Jump to column…" autocomplete="off" spellcheck="false" />
+        <button id="columnSearchClose" class="column-search-close" type="button" aria-label="Close">&#x2715;</button>
+      </div>
+      <div id="columnSearchResults" class="column-search-results"></div>
     </div>
 
     <div id="palette" class="palette hidden">

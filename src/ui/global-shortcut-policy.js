@@ -21,7 +21,9 @@ export function globalShortcutAction(event, { editingCell = false } = {}) {
   if (ctrlKey && key === "s" && shiftKey) return "save-all";
   if (ctrlKey && key === "s" && altKey) return "save-as";
   if (ctrlKey && key === "s") return "save-file";
+  if (ctrlKey && key === "f" && shiftKey) return "search-column1";
   if (ctrlKey && key === "f") return "search";
+  if (altKey && key === "q") return "show-column-search";
   if (ctrlKey && key === "z" && shiftKey) return "redo";
   if (ctrlKey && key === "z") return "undo";
   if (ctrlKey && key === "y") return "redo";

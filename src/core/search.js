@@ -10,6 +10,18 @@ export function normalizeSearchScope(scope) {
 export function findInTable(doc, query, start = { row: 0, column: 0 }, options = {}) {
   if (!query) return null;
   const needle = searchableText(query, options);
+
+  if (options.onlyColumn != null) {
+    const col = options.onlyColumn;
+    const offset = options.includeStart ? 0 : 1;
+    for (let step = 0; step < doc.rowCount; step++) {
+      const row = (start.row + offset + step) % doc.rowCount;
+      const hay = searchableText(doc.getCell(row, col), options);
+      if (hay.includes(needle)) return { row, column: col };
+    }
+    return null;
+  }
+
   const scope = normalizeSearchScope(options.scope);
   const total = searchCandidateCount(doc, scope);
   if (total <= 0) return null;
