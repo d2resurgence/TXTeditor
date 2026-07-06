@@ -275,6 +275,7 @@ Object.assign(CATALOG_ROWS, Object.fromEntries(Object.entries(UI_COMMAND_LABELS)
 // Resurgence fork labels are English-only; every locale shows the English text.
 // Keep them under the "resurgence." prefix: the i18n audit tests exempt it.
 const RESURGENCE_LABELS = {
+  "resurgence.saveAll": "Save All",
   "resurgence.duplicateSkill": "Duplicate Skill",
   "resurgence.duplicateMissile": "Duplicate Missile"
 };

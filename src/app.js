@@ -399,6 +399,7 @@ const commandController = createCommandController({
     openWorkspaceProfile: documentController.openWorkspaceProfile,
     saveWorkspaceProfile: documentController.saveWorkspaceProfile,
     saveFile: documentController.saveFile,
+    saveAll: documentController.saveAll,
     saveAs: documentController.saveAs,
     undo,
     redo,
@@ -547,6 +548,7 @@ const eventController = createAppEventController({
   toggleSidebar,
   toggleProblemsPanel,
   resetRowHeights,
+  saveAll: documentController.saveAll,
   saveAs: documentController.saveAs,
   saveFile: documentController.saveFile,
   redo,
@@ -621,8 +623,8 @@ function execute(command) {
 function applyCommandToDocument(doc, command) {
   if (!command || command.isEmpty) return;
   const started = perfNow();
-  command.redo(doc);
-  undoManagerForDocument(doc).push(command);
+  manualHighlightController.executeTableCommand(doc, command);
+  documentEditorController.pushTableCommand(doc, command);
   finishCommand(doc, command, "edit", started);
   if (doc === activeDoc()) grid.draw();
 }

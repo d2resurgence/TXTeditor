@@ -665,6 +665,22 @@ export function createDocumentController({
     return true;
   }
 
+  async function saveAll() {
+    if (!hasOpenDocument()) return;
+    commitActiveEditor();
+    let saved = 0;
+    let failed = 0;
+    for (const doc of state.docs.filter((candidate) => candidate.dirty)) {
+      const ok = await queueSave(doc, () => saveFileNow(doc)).catch(() => false);
+      if (ok && !doc.dirty) saved++;
+      else failed++;
+    }
+    grid.draw();
+    renderChrome();
+    if (failed > 0) showError(`${failed} file(s) could not be saved.`);
+    else if (saved > 0) showToast(`Saved ${saved} file(s).`);
+  }
+
   async function saveAs() {
     try {
       if (!hasOpenDocument()) return showError(tText("error.noOpenFile")), false;
@@ -1009,6 +1025,7 @@ export function createDocumentController({
     saveWorkspaceProfile,
     restoreWorkspace,
     openJsonDocumentPath,
+    saveAll,
     saveAs,
     saveFile,
     wireCloseHandler

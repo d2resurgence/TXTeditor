@@ -16,7 +16,7 @@ export const COMMAND_LABELS_BASE = [
   ["show-explorer", "command.show-explorer"], ["show-problems", "command.show-problems"], ["zoom-in", "command.zoom-in"], ["zoom-out", "command.zoom-out"], ["zoom-reset", "command.zoom-reset"],
   ["resize-fit", "command.resize-fit"], ["resize-selected-fit", "command.resize-selected-fit"], ["reset-row-heights", "command.reset-row-heights"], ["toggle-sidebar", "command.toggle-sidebar"], ["toggle-theme", "command.toggle-theme"],
   ["open-app-settings", "command.open-app-settings"], ["open-shortcut-settings", "command.open-shortcut-settings"], ["open-settings", "command.open-settings"],
-  ["duplicate-skill", "resurgence.duplicateSkill"], ["duplicate-missile", "resurgence.duplicateMissile"]
+  ["duplicate-skill", "resurgence.duplicateSkill"], ["duplicate-missile", "resurgence.duplicateMissile"], ["save-all", "resurgence.saveAll"]
 ];
 
 export const DEVELOPMENT_COMMAND_LABELS = [
@@ -59,6 +59,7 @@ const COMMAND_ACTIONS = new Map([
   ["open-folder", { type: "handler", name: "openFolder" }],
   ["close-all", { type: "handler", name: "closeAll" }],
   ["save-file", { type: "handler", name: "saveFile" }],
+  ["save-all", { type: "handler", name: "saveAll" }],
   ["save-as", { type: "handler", name: "saveAs" }],
   ["load-fixture-20k", { type: "fixture", size: 20000 }],
   ["load-fixture-200k", { type: "fixture", size: 200000 }],
