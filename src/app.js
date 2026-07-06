@@ -531,7 +531,11 @@ skillDupController = createSkillDupController({
   grid,
   activeDoc,
   addDocument,
+  activateDocument: documentController.activateDocumentTab,
+  stageDocumentView: documentController.stageDocumentView,
   applyCommandToDocument,
+  saveSelectionState,
+  commitActiveEdit: commitActiveEditor,
   renderChrome: () => shellController.renderChrome(),
   showToast,
   escapeHtml
@@ -635,17 +639,18 @@ function execute(command) {
   finishCommand(doc, command, "edit", started);
 }
 
-function applyCommandToDocument(doc, command) {
+function applyCommandToDocument(doc, command, options = {}) {
   if (!command || command.isEmpty) return;
   const started = perfNow();
   manualHighlightController.executeTableCommand(doc, command);
   documentEditorController.pushTableCommand(doc, command);
-  finishCommand(doc, command, "edit", started);
-  if (doc === activeDoc()) grid.draw();
+  finishCommand(doc, command, "edit", started, options);
+  if (doc === activeDoc() && !options.deferSideEffects) grid.draw();
 }
 
-function finishCommand(doc, command, context = "edit", started = perfNow()) {
+function finishCommand(doc, command, context = "edit", started = perfNow(), options = {}) {
   if (!isTableDocument(doc)) return;
+  const deferSideEffects = options.deferSideEffects === true;
   const isAnimData = isAnimDataDocument(doc);
   if (context === "undo" || context === "redo") manualHighlightController.afterCommand(doc, command, context);
   const contentChanged = command.contentChanged !== false;
@@ -654,9 +659,10 @@ function finishCommand(doc, command, context = "edit", started = perfNow()) {
   if (contentChanged) {
     searchController?.notifyDocumentChanged(doc);
   }
-  keepSelectionOnVisibleRow({ doc, selection: state.selection, clamp });
-  saveSelectionState(doc);
-  grid.layout();
+  // Commands can target a background document (skill/missile duplication); the shared selection belongs to the active one.
+  if (doc === activeDoc()) keepSelectionOnVisibleRow({ doc, selection: state.selection, clamp });
+  if (doc === activeDoc() && !deferSideEffects) saveSelectionState(doc);
+  if (!deferSideEffects) grid.layout();
   const lspChange = context === "undo" ? command.undoLspChange ?? command.lspChange : command.lspChange;
   const syncRoute = documentChangeSyncRoute(state.lint.engine, state.lint.enabled);
   if (syncLint) {
@@ -667,7 +673,7 @@ function finishCommand(doc, command, context = "edit", started = perfNow()) {
     }
   }
   recordUiPerf("row-command", started, { changedRows: Array.isArray(lspChange) ? lspChange.length : lspChange?.rows?.length ?? 0, contentChanged });
-  renderChrome();
+  if (!deferSideEffects) renderChrome();
 }
 
 function applyEdits(edits, label = "Edit Cells") {
