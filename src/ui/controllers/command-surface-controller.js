@@ -55,17 +55,32 @@ export function createCommandSurfaceController({
     }
   }
 
+  function insertRowMenuEntry() {
+    const doc = activeDoc();
+    const count = rowsForContextOperation()
+      .filter((row) => row > 0 && row < doc.rowCount).length || 1;
+    return {
+      id: "insert-row-quick",
+      label: count === 1 ? "Insert Row" : `Insert ${count} Rows`
+    };
+  }
+
   function showContextMenu({ x, y, hit }) {
     els.contextMenu.classList.remove("compact-action-menu");
     diagnosticContextMenu = null;
     state.contextHit = hit;
     state.contextMenuActiveGroup = "";
     setContextMenuOpen(true);
-    const canUnhide = activeDoc().hiddenRows.size > 0 || activeDoc().hiddenColumns.size > 0;
+    const doc = activeDoc();
+    const canUnhide = doc.hiddenRows.size > 0 || doc.hiddenColumns.size > 0;
     const focusRow = hit?.row ?? state.selection.focus.row;
     const focusCol = hit?.column ?? state.selection.focus.column;
     const entries = [
+      ...(cellHasReference(focusRow, focusCol)
+        ? [{ id: "go-to-definition", label: tText("menu.goToDefinition") }]
+        : []),
       ...extraContextMenuEntries({ focusRow, focusCol, doc: activeDoc() }),
+      insertRowMenuEntry(),
       { type: "submenu", label: tText("menu.columnOperations"), items: columnItems() },
       { type: "submenu", label: tText("menu.rowOperations"), items: rowItems() },
       { id: "resize-fit", label: tText("menu.resizeToFit") },
@@ -74,7 +89,6 @@ export function createCommandSurfaceController({
       { type: "submenu", label: tText("menu.fill"), items: fillCommandItems() },
       { type: "submenu", label: tText("menu.math"), items: mathCommandItems() },
       { type: "submenu", id: "highlight", label: tText("highlight.menu"), items: highlightItems() },
-      { id: "go-to-definition", label: tText("menu.goToDefinition"), disabled: !cellHasReference(focusRow, focusCol) },
       { id: "cut", label: tText("command.cut"), shortcut: shortcutDisplayForAction("cut", state.shortcuts) },
       { id: "copy", label: tText("command.copy"), shortcut: shortcutDisplayForAction("copy", state.shortcuts) },
       { id: "paste", label: tText("command.paste"), shortcut: shortcutDisplayForAction("paste", state.shortcuts) }

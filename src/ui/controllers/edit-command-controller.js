@@ -14,6 +14,7 @@ import {
   writeClipboardText
 } from "../app-runtime-utils.js";
 import { tText } from "../../core/i18n.js";
+import { rowsFromRanges } from "../row-operation-policy.js";
 
 export function createEditCommandController({
   state,
@@ -81,14 +82,34 @@ export function createEditCommandController({
     if (count !== null) execute(addRowsCommand(activeDoc(), count));
   }
 
+  function selectedDataRowCount(doc) {
+    const rows = [...new Set(
+      rowsFromRanges(state.selection.ranges).filter((row) => row > 0 && row < doc.rowCount)
+    )];
+    return Math.max(1, rows.length);
+  }
+
   async function insertRows() {
-    const count = await promptNumber({
-      title: tText("prompt.insertRows"),
-      message: tText("prompt.rowsToInsert"),
-      defaultValue: 1,
-      min: 1
-    });
-    if (count !== null) execute(insertRowCommand(activeDoc(), state.selection.rect.top, count));
+    const doc = activeDoc();
+    const countFromSelection = selectedDataRowCount(doc);
+    let count = countFromSelection;
+    if (countFromSelection === 1) {
+      const prompted = await promptNumber({
+        title: tText("prompt.insertRows"),
+        message: tText("prompt.rowsToInsert"),
+        defaultValue: 1,
+        min: 1
+      });
+      if (prompted === null) return;
+      count = prompted;
+    }
+    execute(insertRowCommand(doc, state.selection.rect.top, count));
+  }
+
+  function insertRowsQuick() {
+    if (!hasOpenDocument()) return;
+    const doc = activeDoc();
+    execute(insertRowCommand(doc, state.selection.rect.top, selectedDataRowCount(doc)));
   }
 
   async function addColumns() {
@@ -131,6 +152,7 @@ export function createEditCommandController({
     selectAll,
     addRows,
     insertRows,
+    insertRowsQuick,
     addColumns,
     insertColumns,
     math
