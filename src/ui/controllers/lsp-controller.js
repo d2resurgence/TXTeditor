@@ -86,8 +86,13 @@ export function createLspController({
   handleWatchedFilesChanged = () => {},
   reserveLspGeneration = lspReserveGeneration,
   lspHoverRequest = lspHover,
-  lspDefinitionRequest = lspDefinition
+  lspDefinitionRequest = lspDefinition,
+  stringDefinition = null
 }) {
+  const stringGoTo = stringDefinition ?? {
+    cellHasReference: () => false,
+    tryNavigate: async () => false
+  };
   state.lsp.generation = Number(state.lsp.generation) || 0;
   state.lsp.readiness ??= state.lsp.started ? "ready" : "stopped";
   state.lsp.openFileCount ??= 0;
@@ -793,14 +798,16 @@ export function createLspController({
   }
 
   async function goToDefinition() {
-    if (!isVectorLintEngine() || !state.lsp.started) return;
     const doc = activeDoc();
-    if (doc?.kind === "json") return;
+    if (!doc || doc.kind === "json") return;
     const uri = docToUri(doc);
-    if (!uri) return;
     const hit = state.contextHit;
     const row = hit?.row ?? state.selection.focus.row;
     const col = hit?.column ?? state.selection.focus.column;
+    if (!uri || !isVectorLintEngine() || !state.lsp.started) {
+      if (!await stringGoTo.tryNavigate(row, col)) showToast(tText("lsp.noDefinition"));
+      return;
+    }
     const charOffset = computeCharOffset(doc, row, col);
     const generation = state.lsp.generation ?? 0;
     const requestSequence = ++definitionRequestSequence;
@@ -826,12 +833,12 @@ export function createLspController({
     try {
       result = await lspDefinitionRequest(uri, row, charOffset, generation);
     } catch (error) {
-      if (sourceIsCurrent()) reportDefinitionFailure(doc, uri, error, "go-to-definition");
+      if (sourceIsCurrent() && !await stringGoTo.tryNavigate(row, col)) reportDefinitionFailure(doc, uri, error, "go-to-definition");
       return;
     }
     if (!sourceIsCurrent()) return;
     if (!result) {
-      showToast(tText("lsp.noDefinition"));
+      if (!await stringGoTo.tryNavigate(row, col)) showToast(tText("lsp.noDefinition"));
       return;
     }
     const targetPath = pathFromUri(result.uri);
@@ -878,7 +885,8 @@ export function createLspController({
     return metadata;
   }
 
-  function cellHasReference(_row, _col) {
+  function cellHasReference(row, col) {
+    if (activeDoc()?.kind !== "json" && stringGoTo.cellHasReference(row, col)) return true;
     if (!isVectorLintEngine() || !state.lsp.started || activeDoc()?.kind === "json") return false;
     return Boolean(docToUri(activeDoc()));
   }

@@ -56,6 +56,7 @@ import { createShellController } from "./ui/controllers/shell-controller.js";
 import { createLocaleController, initializeLocale } from "./ui/controllers/locale-controller.js";
 import { createManualHighlightController } from "./ui/manual-highlight.js";
 import { t, tText } from "./core/i18n.js";
+import { createStringGotoController } from "./ui/controllers/string-goto-controller.js";
 const { state, savedTheme, savedGridFont, savedPanelState } = createInitialAppState({ storage: localStorage });
 const {
   uiPerfSamples,
@@ -158,6 +159,15 @@ const {
 syncDockLayout();
 
 let shellController = null, gridCommandController = null, settingsController = null;
+let stringGotoController = null;
+const stringDefinitionBridge = {
+  cellHasReference: () => false,
+  tryNavigate: async () => false
+};
+const stringWorkspaceBridge = {
+  loadStringTablesForWorkspace: async () => {},
+  saveJsonStringViewIfNeeded: async () => false
+};
 const grid = new CanvasGrid({
   host: els.host,
   canvas: els.canvas,
@@ -236,7 +246,8 @@ lspController = createLspController({
       editorReady: jsonEditorController.available(),
       desktop: isTauriRuntime()
     }),
-  handleWatchedFilesChanged: (payload) => documentController?.handleWatchedFilesChanged(payload)
+  handleWatchedFilesChanged: (payload) => documentController?.handleWatchedFilesChanged(payload),
+  stringDefinition: stringDefinitionBridge
 });
 cellInputController = createCellInputController({
   els,
@@ -326,7 +337,9 @@ documentController = createDocumentController({
   isLegacyLintEngine,
   setLintDiagnostics, updateGridDiagnostics,
   resetWorkspaceView: () => shellController?.resetWorkspaceView(),
-  scrollProblemsToActiveFile, resizeOpenedDocumentToFit: () => gridCommandController.resizeFit(false), ...manualHighlightController.documentLifecycleHooks()
+  scrollProblemsToActiveFile, resizeOpenedDocumentToFit: () => gridCommandController.resizeFit(false), ...manualHighlightController.documentLifecycleHooks(),
+  loadStringTablesForWorkspace: (workspacePath) => stringWorkspaceBridge.loadStringTablesForWorkspace(workspacePath),
+  saveJsonStringViewIfNeeded: (doc) => stringWorkspaceBridge.saveJsonStringViewIfNeeded(doc)
 });
 searchController = createSearchController({
   state,
@@ -472,6 +485,23 @@ shellController = createShellController({
   lintPathKey,
   escapeHtml
 });
+stringGotoController = createStringGotoController({
+  state,
+  grid,
+  activeDoc,
+  addDocument,
+  applyFreezeToDoc,
+  updateGridDiagnostics,
+  updateActiveProblemHighlight,
+  renderChrome: () => shellController.renderChrome(),
+  saveSelectionState,
+  els,
+  showToast
+});
+stringDefinitionBridge.cellHasReference = (row, col) => stringGotoController.cellHasStringReference(row, col);
+stringDefinitionBridge.tryNavigate = (row, col) => stringGotoController.tryGoToStringDefinition(row, col);
+stringWorkspaceBridge.loadStringTablesForWorkspace = (workspacePath) => stringGotoController.loadStringTablesForWorkspace(workspacePath);
+stringWorkspaceBridge.saveJsonStringViewIfNeeded = (doc) => stringGotoController.saveJsonStringViewIfNeeded(doc);
 const eventController = createAppEventController({
   state,
   els,

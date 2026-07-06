@@ -10,11 +10,13 @@ export {
   openNativePathsBulk,
   openWorkspaceNative,
   readFileAsDocument,
+  readRawTextFiles,
   readTextFilesNative,
   saveDocumentNative,
   saveTextNative,
   startupOpenPathsNative,
-  takePendingOpenPathsNative
+  takePendingOpenPathsNative,
+  writeRawTextFile
 } from "./platform/file-io.js";
 export {
   closeWindow,

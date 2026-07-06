@@ -120,6 +120,8 @@ export function createDocumentController({
   captureTableAnnotationIdentity = () => "",
   onTableDocumentSaved = () => {},
   resizeOpenedDocumentToFit = async () => {},
+  loadStringTablesForWorkspace = async () => {},
+  saveJsonStringViewIfNeeded = async () => false,
   storage = globalThis.localStorage,
   sessionStorage = globalThis.sessionStorage
 }) {
@@ -514,6 +516,7 @@ export function createDocumentController({
     state.workspace = workspace;
     if (persist) writeWorkspacePath(workspace.path);
     resetLegacyWorkspaceIndex();
+    loadStringTablesForWorkspace(workspace.path).catch(() => {});
     if (isVectorLintEngine()) {
       if (state.lint.enabled) {
         try { await lspStartWorkspace(workspace.path, { includeSubfolders }); }
@@ -638,6 +641,11 @@ export function createDocumentController({
     const previousUri = docToUri(doc);
     const previousAnnotationIdentity = isTableDocument(doc) ? captureTableAnnotationIdentity(doc) : "";
     if (isTauriRuntime()) {
+      if (await saveJsonStringViewIfNeeded(doc)) {
+        grid.draw();
+        renderChrome();
+        return true;
+      }
       const saved = await saveDocumentNative(doc, false, { validateTarget: (path) => validateSaveTarget(doc, path) });
       if (!saved) return false;
       await lspRebindSavedDoc(doc, previousUri);
