@@ -57,6 +57,7 @@ import { createLocaleController, initializeLocale } from "./ui/controllers/local
 import { createManualHighlightController } from "./ui/manual-highlight.js";
 import { t, tText } from "./core/i18n.js";
 import { createStringGotoController } from "./ui/controllers/string-goto-controller.js";
+import { createSkillDupController } from "./ui/controllers/skill-dup-controller.js";
 const { state, savedTheme, savedGridFont, savedPanelState } = createInitialAppState({ storage: localStorage });
 const {
   uiPerfSamples,
@@ -167,6 +168,10 @@ const stringDefinitionBridge = {
 const stringWorkspaceBridge = {
   loadStringTablesForWorkspace: async () => {},
   saveJsonStringViewIfNeeded: async () => false
+};
+const skillDupBridge = {
+  runFromCommand: () => {},
+  contextMenuEntries: () => []
 };
 const grid = new CanvasGrid({
   host: els.host,
@@ -428,6 +433,8 @@ const commandController = createCommandController({
     showShortcutSettings: shortcutSettingsController.showShortcutSettings,
     showSettings: settingsController.showSettings,
     goToDefinition: lspController.goToDefinition,
+    duplicateSkill: () => skillDupBridge.runFromCommand("duplicate-skill"),
+    duplicateMissile: () => skillDupBridge.runFromCommand("duplicate-missile"),
     loadFixture: documentController.loadFixture,
     math,
     toggleFreeze,
@@ -448,7 +455,8 @@ commandSurfaceController = createCommandSurfaceController({
   cellHasReference,
   clearVisibleLspHover,
   showError,
-  escapeHtml, manualHighlights: manualHighlightController
+  escapeHtml, manualHighlights: manualHighlightController,
+  extraContextMenuEntries: ({ focusRow, doc }) => skillDupBridge.contextMenuEntries({ focusRow, doc })
 });
 shellController = createShellController({
   state,
@@ -502,6 +510,21 @@ stringDefinitionBridge.cellHasReference = (row, col) => stringGotoController.cel
 stringDefinitionBridge.tryNavigate = (row, col) => stringGotoController.tryGoToStringDefinition(row, col);
 stringWorkspaceBridge.loadStringTablesForWorkspace = (workspacePath) => stringGotoController.loadStringTablesForWorkspace(workspacePath);
 stringWorkspaceBridge.saveJsonStringViewIfNeeded = (doc) => stringGotoController.saveJsonStringViewIfNeeded(doc);
+let skillDupController = null;
+skillDupController = createSkillDupController({
+  state,
+  els,
+  grid,
+  activeDoc,
+  addDocument,
+  applyCommandToDocument,
+  renderChrome: () => shellController.renderChrome(),
+  showToast,
+  escapeHtml
+});
+skillDupBridge.runFromCommand = (commandId) => skillDupController.runFromCommand(commandId);
+skillDupBridge.contextMenuEntries = ({ focusRow, doc }) => skillDupController.contextMenuEntries({ focusRow, doc });
+skillDupController.wireEvents();
 const eventController = createAppEventController({
   state,
   els,
@@ -593,6 +616,15 @@ function execute(command) {
   manualHighlightController.executeTableCommand(doc, command);
   documentEditorController.pushTableCommand(doc, command);
   finishCommand(doc, command, "edit", started);
+}
+
+function applyCommandToDocument(doc, command) {
+  if (!command || command.isEmpty) return;
+  const started = perfNow();
+  command.redo(doc);
+  undoManagerForDocument(doc).push(command);
+  finishCommand(doc, command, "edit", started);
+  if (doc === activeDoc()) grid.draw();
 }
 
 function finishCommand(doc, command, context = "edit", started = perfNow()) {

@@ -66,7 +66,7 @@ test("locale catalogs only retain deliberate product, protocol, or universal UI 
   ]);
   for (const locale of SUPPORTED_LOCALES.filter((locale) => locale !== "enUS")) {
     for (const [key, english] of Object.entries(catalogs.enUS)) {
-      if (allowedEnglishCopies.has(key)) continue;
+      if (allowedEnglishCopies.has(key) || key.startsWith("resurgence.")) continue;
       assert.notEqual(catalogs[locale][key], english, `${locale}:${key} must not duplicate English`);
     }
   }

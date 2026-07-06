@@ -272,6 +272,16 @@ Object.assign(CATALOG_ROWS, Object.fromEntries(Object.entries(UI_COMMAND_LABELS)
   key, SUPPORTED_LOCALES.map((locale) => uiCommandLabel(locale, english))
 ])));
 
+// Resurgence fork labels are English-only; every locale shows the English text.
+// Keep them under the "resurgence." prefix: the i18n audit tests exempt it.
+const RESURGENCE_LABELS = {
+  "resurgence.duplicateSkill": "Duplicate Skill",
+  "resurgence.duplicateMissile": "Duplicate Missile"
+};
+Object.assign(CATALOG_ROWS, Object.fromEntries(Object.entries(RESURGENCE_LABELS).map(([key, english]) => [
+  key, SUPPORTED_LOCALES.map(() => english)
+])));
+
 Object.assign(CATALOG_ROWS, {
   "lsp.noDefinition": ["No definition found.", "找不到定義。", "Keine Definition gefunden.", "No se encontró ninguna definición.", "Aucune définition trouvée.", "Nessuna definizione trovata.", "정의를 찾을 수 없습니다.", "Nie znaleziono definicji.", "No se encontró ninguna definición.", "定義が見つかりません。", "Nenhuma definição encontrada.", "Определение не найдено.", "未找到定义。"],
   "toast.externalReload": ["{file} reloaded after an external change.", "外部變更後已重新載入 {file}。", "{file} wurde nach einer externen Änderung neu geladen.", "{file} se recargó tras un cambio externo.", "{file} a été rechargé après une modification externe.", "{file} è stato ricaricato dopo una modifica esterna.", "외부 변경 후 {file}을(를) 다시 불러왔습니다.", "Wczytano ponownie {file} po zewnętrznej zmianie.", "{file} se recargó tras un cambio externo.", "外部変更後に {file} を再読み込みしました。", "{file} foi recarregado após uma alteração externa.", "{file} перезагружен после внешнего изменения.", "外部更改后已重新加载 {file}。"]

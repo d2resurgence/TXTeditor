@@ -27,7 +27,8 @@ export function createCommandSurfaceController({
   clearVisibleLspHover,
   showError,
   escapeHtml,
-  manualHighlights = null
+  manualHighlights = null,
+  extraContextMenuEntries = () => []
 }) {
   let diagnosticContextMenu = null;
 
@@ -64,6 +65,7 @@ export function createCommandSurfaceController({
     const focusRow = hit?.row ?? state.selection.focus.row;
     const focusCol = hit?.column ?? state.selection.focus.column;
     const entries = [
+      ...extraContextMenuEntries({ focusRow, focusCol, doc: activeDoc() }),
       { type: "submenu", label: tText("menu.columnOperations"), items: columnItems() },
       { type: "submenu", label: tText("menu.rowOperations"), items: rowItems() },
       { id: "resize-fit", label: tText("menu.resizeToFit") },

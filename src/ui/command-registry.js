@@ -15,7 +15,8 @@ export const COMMAND_LABELS_BASE = [
   ["toggle-freeze-row", "command.toggle-freeze-row"], ["toggle-freeze-column", "command.toggle-freeze-column"], ["toggle-colorize", "command.toggle-colorize"], ["toggle-vector-lsp-hover", "command.toggle-vector-lsp-hover"], ["toggle-lint", "command.toggle-lint"], ["toggle-lint-rules", "command.toggle-lint-rules"],
   ["show-explorer", "command.show-explorer"], ["show-problems", "command.show-problems"], ["zoom-in", "command.zoom-in"], ["zoom-out", "command.zoom-out"], ["zoom-reset", "command.zoom-reset"],
   ["resize-fit", "command.resize-fit"], ["resize-selected-fit", "command.resize-selected-fit"], ["reset-row-heights", "command.reset-row-heights"], ["toggle-sidebar", "command.toggle-sidebar"], ["toggle-theme", "command.toggle-theme"],
-  ["open-app-settings", "command.open-app-settings"], ["open-shortcut-settings", "command.open-shortcut-settings"], ["open-settings", "command.open-settings"]
+  ["open-app-settings", "command.open-app-settings"], ["open-shortcut-settings", "command.open-shortcut-settings"], ["open-settings", "command.open-settings"],
+  ["duplicate-skill", "resurgence.duplicateSkill"], ["duplicate-missile", "resurgence.duplicateMissile"]
 ];
 
 export const DEVELOPMENT_COMMAND_LABELS = [
@@ -111,7 +112,9 @@ const COMMAND_ACTIONS = new Map([
   ["open-app-settings", { type: "handler", name: "showAppSettings" }],
   ["open-shortcut-settings", { type: "handler", name: "showShortcutSettings" }],
   ["open-settings", { type: "handler", name: "showSettings" }],
-  ["go-to-definition", { type: "handler", name: "goToDefinition" }]
+  ["go-to-definition", { type: "handler", name: "goToDefinition" }],
+  ["duplicate-skill", { type: "handler", name: "duplicateSkill" }],
+  ["duplicate-missile", { type: "handler", name: "duplicateMissile" }]
 ]);
 
 export function commandLabelsForEnvironment({ isDevelopmentMode = false } = {}) {
