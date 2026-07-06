@@ -45,15 +45,30 @@ export function createCommandSurfaceController({
     }
   }
 
+  function insertRowMenuEntry() {
+    const doc = activeDoc();
+    const count = rowsForContextOperation()
+      .filter((row) => row > 0 && row < doc.rowCount).length || 1;
+    return {
+      id: "insert-row-quick",
+      label: count === 1 ? "Insert Row" : `Insert ${count} Rows`
+    };
+  }
+
   function showContextMenu({ x, y, hit }) {
     state.contextHit = hit;
     state.contextMenuActiveGroup = "";
     setContextMenuOpen(true);
-    const canUnhide = activeDoc().hiddenRows.size > 0 || activeDoc().hiddenColumns.size > 0;
+    const doc = activeDoc();
+    const canUnhide = doc.hiddenRows.size > 0 || doc.hiddenColumns.size > 0;
     const focusRow = hit?.row ?? state.selection.focus.row;
     const focusCol = hit?.column ?? state.selection.focus.column;
     const entries = [
-      ...extraContextMenuEntries({ focusRow, focusCol, doc: activeDoc() }),
+      ...(cellHasReference(focusRow, focusCol)
+        ? [{ id: "go-to-definition", label: "Go To Definition" }]
+        : []),
+      ...extraContextMenuEntries({ focusRow, focusCol, doc }),
+      insertRowMenuEntry(),
       { type: "submenu", label: "Column Operations", items: columnCommandItems() },
       { type: "submenu", label: "Row Operations", items: rowItems() },
       { id: "resize-fit", label: "Resize To Fit" },
@@ -61,7 +76,6 @@ export function createCommandSurfaceController({
       { id: "unhide-all", label: "Unhide All", disabled: !canUnhide },
       { type: "submenu", label: "Fill", items: fillCommandItems() },
       { type: "submenu", label: "Math", items: mathCommandItems() },
-      { id: "go-to-definition", label: "Go To Definition", disabled: !cellHasReference(focusRow, focusCol) },
       { id: "cut", label: "Cut", shortcut: "Ctrl+X" },
       { id: "copy", label: "Copy", shortcut: "Ctrl+C" },
       { id: "paste", label: "Paste", shortcut: "Ctrl+V" }

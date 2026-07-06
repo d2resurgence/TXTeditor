@@ -101,6 +101,7 @@ const COMMAND_ACTIONS = new Map([
   ["clear-selection", { type: "execute", name: "clearSelection" }],
   ["add-row", { type: "handler", name: "addRows" }],
   ["insert-row", { type: "handler", name: "insertRows" }],
+  ["insert-row-quick", { type: "handler", name: "insertRowsQuick" }],
   ["clone-row", { type: "handler", name: "cloneRows" }],
   ["delete-row", { type: "execute", name: "deleteRow" }],
   ["clear-row", { type: "execute", name: "clearRow" }],

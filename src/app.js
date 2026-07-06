@@ -317,6 +317,7 @@ const {
   selectAll,
   addRows,
   insertRows,
+  insertRowsQuick,
   addColumns,
   insertColumns,
   math
@@ -350,6 +351,7 @@ const commandController = createCommandController({
     selectAll,
     addRows,
     insertRows,
+    insertRowsQuick,
     cloneRows,
     addColumns,
     insertColumns,

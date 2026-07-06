@@ -323,12 +323,14 @@ export function createSkillDupController({
   }
 
   function contextMenuEntries({ focusRow, doc }) {
-    const isSkillsDoc = /^skills\.txt$/i.test(doc.name);
-    const isMissilesDoc = /^missiles\.txt$/i.test(doc.name);
-    return [
-      { id: "duplicate-skill", label: "Duplicate Skill", disabled: !isSkillsDoc || focusRow < 1 },
-      { id: "duplicate-missile", label: "Duplicate Missile", disabled: !isMissilesDoc || focusRow < 1 }
-    ];
+    const entries = [];
+    if (focusRow >= 1 && /^skills\.txt$/i.test(doc.name)) {
+      entries.push({ id: "duplicate-skill", label: "Duplicate Skill" });
+    }
+    if (focusRow >= 1 && /^missiles\.txt$/i.test(doc.name)) {
+      entries.push({ id: "duplicate-missile", label: "Duplicate Missile" });
+    }
+    return entries;
   }
 
   function wireEvents() {
