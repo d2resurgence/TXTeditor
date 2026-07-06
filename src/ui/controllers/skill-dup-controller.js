@@ -5,6 +5,8 @@ import {
   buildMissileRemap,
   buildMissileValues,
   buildSkillValues,
+  duplicateNameUnchanged,
+  findUnchangedDuplicateEntries,
   resolveMissileDuplicate,
   resolveSkillDuplicate
 } from "../../core/skill-duplicate.js";
@@ -74,6 +76,7 @@ export function createSkillDupController({
 
     if (prefill != null) {
       els.skillDupSource.value = prefill;
+      els.skillDupNewName.value = prefill;
     } else {
       const doc = activeDoc();
       const colName = nextMode === "skill" ? "skill" : "missile";
@@ -81,7 +84,11 @@ export function createSkillDupController({
       if (row > 0) {
         const colIdx = Array.from({ length: doc.columnCount }, (_, column) => column)
           .find((column) => doc.getCell(0, column).toLowerCase() === colName);
-        if (colIdx != null) els.skillDupSource.value = doc.getCell(row, colIdx);
+        if (colIdx != null) {
+          const name = doc.getCell(row, colIdx);
+          els.skillDupSource.value = name;
+          els.skillDupNewName.value = name;
+        }
       }
     }
     els.skillDupSource.focus();
@@ -90,6 +97,31 @@ export function createSkillDupController({
   function closeDialog() {
     els.skillDupDialog.classList.add("hidden");
     changeset = null;
+  }
+
+  function refreshPreviewValidation() {
+    if (!changeset) return;
+    const unchanged = findUnchangedDuplicateEntries(changeset);
+    const unchangedMissiles = new Set(
+      unchanged.filter((item) => item.kind === "missile").map((item) => item.entry)
+    );
+    const skillUnchanged = unchanged.some((item) => item.kind === "skill");
+
+    for (const row of els.skillDupBody.querySelectorAll("tr")) {
+      const kind = row.dataset.kind;
+      const index = Number(row.dataset.index);
+      const entry = kind === "skill"
+        ? changeset.skill
+        : changeset.missiles[changeset.skill ? index - 1 : index];
+      const newNameInput = row.querySelector('input[data-field="newName"]');
+      if (!newNameInput) continue;
+      const needsEdit = kind === "skill"
+        ? skillUnchanged && duplicateNameUnchanged(entry.originalName, entry.newName)
+        : unchangedMissiles.has(entry);
+      newNameInput.classList.toggle("skill-dup-name-unchanged", needsEdit);
+    }
+
+    els.skillDupApply.disabled = unchanged.length > 0;
   }
 
   function renderPreview(nextChangeset) {
@@ -120,11 +152,13 @@ export function createSkillDupController({
             const value = Number.parseInt(input.value, 10);
             entry.targetRow = Number.isNaN(value) ? -1 : value;
           }
+          refreshPreviewValidation();
         });
       }
     }
 
     els.skillDupPreview.classList.remove("hidden");
+    refreshPreviewValidation();
   }
 
   function readTargetId(doc, targetRow) {
@@ -214,6 +248,20 @@ export function createSkillDupController({
 
   function apply() {
     if (!changeset) return;
+    const unchanged = findUnchangedDuplicateEntries(changeset);
+    if (unchanged.length) {
+      const missileNames = unchanged
+        .filter((item) => item.kind === "missile")
+        .map((item) => item.entry.originalName);
+      if (missileNames.length) {
+        showError(`Set a new name for: ${missileNames.join(", ")}`);
+      } else {
+        showError("Set a new skill name before applying.");
+      }
+      refreshPreviewValidation();
+      return;
+    }
+    clearError();
     const isMissileMode = mode === "missile";
     const missilesDoc = findDocByName("Missiles.txt");
     if (!missilesDoc) {

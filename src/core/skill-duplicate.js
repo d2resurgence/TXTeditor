@@ -102,6 +102,106 @@ function makeUnusedSuggester(doc, nameColIdx) {
 }
 
 /**
+ * Detect how a skill/missile name was transformed (suffix, prefix, or stem suffix).
+ */
+export function detectNameTransform(oldName, newName) {
+  const o = oldName.trim();
+  const n = newName.trim();
+  if (!o || !n) return { kind: 'fallback-space', affix: n ? `${n} ` : '' };
+  const ol = o.toLowerCase();
+  const nl = n.toLowerCase();
+  if (ol === nl) return { kind: 'same' };
+  if (nl.startsWith(ol)) return { kind: 'suffix', affix: n.slice(o.length) };
+  if (nl.endsWith(ol)) return { kind: 'prefix', affix: n.slice(0, n.length - o.length) };
+  const stemOld = ol.replace(/\s+/g, '');
+  const stemNew = nl.replace(/\s+/g, '');
+  if (stemNew.startsWith(stemOld)) {
+    return { kind: 'stem-suffix', stemOld, stemNew, stemAffix: stemNew.slice(stemOld.length) };
+  }
+  return { kind: 'fallback-space', affix: `${n} ` };
+}
+
+/**
+ * Derive a duplicated missile name from the source name and the user's rename.
+ */
+function applySkillStemPrefixRename(orig, skillStem, newSkillStemText) {
+  if (!skillStem) return null;
+  const trimmed = orig.trim();
+  const ol = trimmed.toLowerCase();
+  if (!ol.startsWith(skillStem)) return null;
+  const replacement = trimmed === trimmed.toLowerCase()
+    ? newSkillStemText.toLowerCase()
+    : newSkillStemText;
+  return replacement + trimmed.slice(skillStem.length);
+}
+
+export function deriveMissileNewName(origName, transform, context = {}) {
+  const orig = origName.trim();
+  if (!orig) return orig;
+  const ol = orig.toLowerCase();
+  const {
+    oldSkillName = '',
+    newSkillName = '',
+    sourceMissileName = '',
+    newMissileName = '',
+    isSourceMissile = false
+  } = context;
+
+  if (isSourceMissile && ol === sourceMissileName.trim().toLowerCase()) {
+    return newMissileName.trim() || orig;
+  }
+
+  const skillStem = oldSkillName.trim().replace(/\s+/g, '').toLowerCase();
+  const newSkillStemText = newSkillName.trim().replace(/\s+/g, '');
+  const formatStemReplacement = (replacement) => (
+    orig === orig.toLowerCase() ? replacement.toLowerCase() : replacement
+  );
+  if (skillStem && ol === skillStem) return formatStemReplacement(newSkillStemText);
+  if (skillStem && ol === oldSkillName.trim().toLowerCase()) {
+    return formatStemReplacement(newSkillStemText);
+  }
+  if (oldSkillName.trim()) {
+    const stemPrefixed = applySkillStemPrefixRename(orig, skillStem, newSkillStemText);
+    if (stemPrefixed != null) return stemPrefixed;
+  }
+
+  switch (transform.kind) {
+    case 'same':
+      return orig;
+    case 'suffix': {
+      if (ol === oldSkillName.trim().toLowerCase()) return newSkillName.trim();
+      return orig + transform.affix;
+    }
+    case 'prefix':
+      return orig;
+    case 'stem-suffix':
+      if (ol.startsWith(transform.stemOld)) {
+        return transform.stemNew + orig.slice(transform.stemOld.length);
+      }
+      return orig + transform.stemAffix;
+    default:
+      return orig;
+  }
+}
+
+export function duplicateNameUnchanged(originalName, newName) {
+  return originalName.trim().toLowerCase() === newName.trim().toLowerCase();
+}
+
+export function findUnchangedDuplicateEntries(changeset) {
+  const entries = [];
+  if (changeset.skill && duplicateNameUnchanged(changeset.skill.originalName, changeset.skill.newName)) {
+    entries.push({ kind: "skill", entry: changeset.skill });
+  }
+  for (const missile of changeset.missiles ?? []) {
+    if (duplicateNameUnchanged(missile.originalName, missile.newName)) {
+      entries.push({ kind: "missile", entry: missile });
+    }
+  }
+  return entries;
+}
+
+/**
  * Analyse which rows need to be duplicated for a skill.
  * Returns a changeset (plain data the dialog can display and edit).
  * On error returns { error: string }.
@@ -133,7 +233,7 @@ export function resolveSkillDuplicate(skillsDoc, missilesDoc, skillName, newSkil
 
   const sl = skillName.trim();
   const nl = newSkillName.trim();
-  const prefix = nl.toLowerCase().endsWith(sl.toLowerCase()) ? nl.slice(0, nl.length - sl.length) : nl + ' ';
+  const transform = detectNameTransform(sl, nl);
 
   const missileByName = makeRowIndex(missilesDoc, missileNameColIdx);
   const subColIdxs = MISSILE_SUB_COLS.map(c => mCols.get(c) ?? -1);
@@ -152,11 +252,16 @@ export function resolveSkillDuplicate(skillsDoc, missilesDoc, skillName, newSkil
   const missiles = sorted.map(ml => {
     const srcRow = missileByName.get(ml);
     const origName = srcRow != null ? missilesDoc.getCell(srcRow, missileNameColIdx).trim() : ml;
-    return { sourceRow: srcRow ?? -1, originalName: origName, newName: prefix + origName, targetRow: nextMissileSlot() };
+    return {
+      sourceRow: srcRow ?? -1,
+      originalName: origName,
+      newName: deriveMissileNewName(origName, transform, { oldSkillName: sl, newSkillName: nl }),
+      targetRow: nextMissileSlot()
+    };
   });
 
   return {
-    prefix,
+    transform,
     skill: { sourceRow, originalName: sl, newName: nl, newId: nextFreeId(skillsDoc, skillIdColIdx), targetRow: nextSkillSlot() },
     missiles,
   };
@@ -181,7 +286,7 @@ export function resolveMissileDuplicate(missilesDoc, missileName, newMissileName
   if (!missileByName.has(sl.toLowerCase())) return { error: `Missile not found: "${sl}"` };
   if (missileByName.has(nl.toLowerCase())) return { error: `Missile already exists: "${nl}"` };
 
-  const prefix = nl.toLowerCase().endsWith(sl.toLowerCase()) ? nl.slice(0, nl.length - sl.length) : nl + ' ';
+  const transform = detectNameTransform(sl, nl);
   const subColIdxs = MISSILE_SUB_COLS.map(c => mCols.get(c) ?? -1);
   const missileSet = collectMissileTree([sl], missileByName, missilesDoc, subColIdxs, exclude);
   const sorted = topoSort(missileSet, missileByName, missilesDoc, subColIdxs);
@@ -190,10 +295,19 @@ export function resolveMissileDuplicate(missilesDoc, missileName, newMissileName
   const missiles = sorted.map(ml => {
     const srcRow = missileByName.get(ml);
     const origName = srcRow != null ? missilesDoc.getCell(srcRow, missileNameColIdx).trim() : ml;
-    return { sourceRow: srcRow ?? -1, originalName: origName, newName: prefix + origName, targetRow: nextSlot() };
+    return {
+      sourceRow: srcRow ?? -1,
+      originalName: origName,
+      newName: deriveMissileNewName(origName, transform, {
+        sourceMissileName: sl,
+        newMissileName: nl,
+        isSourceMissile: ml === sl.toLowerCase()
+      }),
+      targetRow: nextSlot()
+    };
   });
 
-  return { prefix, missiles };
+  return { transform, missiles };
 }
 
 /**
