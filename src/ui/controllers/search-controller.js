@@ -118,10 +118,16 @@ export function createSearchController({
     searchModal?.classList.remove("search-modal-dragging");
   }
 
-  function showSearch() {
+  function showSearch(options) {
+    const scope = typeof options?.scope === "string" ? options.scope : null;
     const doc = activeDoc();
     setReplaceMode(false);
     setJsonSearchMode(isJsonDocument(doc));
+    const scopeInput = scope ? els.searchPanel.querySelector(`input[name='searchScope'][value='${scope}']`) : null;
+    if (scopeInput && !scopeInput.checked) {
+      scopeInput.checked = true;
+      resetSearchConditions();
+    }
     if (!searchWasOpened) Object.assign(state.search, searchStateAfterInput());
     searchWasOpened = true;
     els.searchPanel.classList.remove("hidden");

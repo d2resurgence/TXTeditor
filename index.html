@@ -49,6 +49,7 @@
             <button data-command="search" data-i18n="toolbar.find">Find</button>
             <button class="toggle-button" data-command="toggle-freeze-row" data-i18n="toolbar.freezeRow">Freeze Row</button>
             <button class="toggle-button" data-command="toggle-freeze-column" data-i18n="toolbar.freezeColumn">Freeze Column</button>
+            <button data-command="show-column-search" data-i18n="resurgence.goToColumn">Go to Column</button>
             <button data-command="open-shortcut-settings" data-i18n="toolbar.shortcuts">Shortcuts</button>
             <button data-command="open-app-settings" data-i18n="toolbar.settings">Settings</button>
           </section>
@@ -123,6 +124,14 @@
           <button data-search-close data-i18n="common.close">Close</button>
         </div>
       </div>
+    </div>
+
+    <div id="columnSearch" class="column-search hidden">
+      <div class="column-search-header">
+        <input id="columnSearchInput" placeholder="Jump to column…" autocomplete="off" spellcheck="false" />
+        <button id="columnSearchClose" class="column-search-close" type="button" aria-label="Close">&#x2715;</button>
+      </div>
+      <div id="columnSearchResults" class="column-search-results"></div>
     </div>
 
     <div id="palette" class="palette hidden">

@@ -11,6 +11,7 @@ export function createAppEventController({
   documentController,
   hasOpenDocument,
   searchController,
+  columnSearchController,
   syncDockLayout,
   wirePaneResizers,
   positionContextMenu,
@@ -107,6 +108,11 @@ export function createAppEventController({
       hideContextMenu();
       return;
     }
+    if (event.key === "Escape" && columnSearchController.isOpen()) {
+      event.preventDefault();
+      columnSearchController.closeColumnSearch();
+      return;
+    }
     if (event.key === "Escape" && !els.searchPanel.classList.contains("hidden")) {
       event.preventDefault();
       searchController.closeSearch();
@@ -178,6 +184,8 @@ export function createAppEventController({
     if (action === "save-all") return prevent(event, saveAll);
     if (action === "save-as") return prevent(event, saveAs);
     if (action === "save-file") return prevent(event, saveFile);
+    if (action === "search-column1") return prevent(event, () => searchController.showSearch({ scope: "row-titles" }));
+    if (action === "show-column-search") return prevent(event, columnSearchController.showColumnSearch);
     if (action === "search") return prevent(event, searchController.toggleSearch);
     if (action === "find-next") return prevent(event, () => runEditorNavigationCommand("find-next"));
     if (action === "find-previous") return prevent(event, () => runEditorNavigationCommand("find-previous"));

@@ -16,7 +16,8 @@ export const COMMAND_LABELS_BASE = [
   ["show-explorer", "command.show-explorer"], ["show-problems", "command.show-problems"], ["zoom-in", "command.zoom-in"], ["zoom-out", "command.zoom-out"], ["zoom-reset", "command.zoom-reset"],
   ["resize-fit", "command.resize-fit"], ["resize-selected-fit", "command.resize-selected-fit"], ["reset-row-heights", "command.reset-row-heights"], ["toggle-sidebar", "command.toggle-sidebar"], ["toggle-theme", "command.toggle-theme"],
   ["open-app-settings", "command.open-app-settings"], ["open-shortcut-settings", "command.open-shortcut-settings"], ["open-settings", "command.open-settings"],
-  ["duplicate-skill", "resurgence.duplicateSkill"], ["duplicate-missile", "resurgence.duplicateMissile"], ["save-all", "resurgence.saveAll"]
+  ["duplicate-skill", "resurgence.duplicateSkill"], ["duplicate-missile", "resurgence.duplicateMissile"], ["save-all", "resurgence.saveAll"],
+  ["search-column1", "resurgence.findInFirstColumn"], ["show-column-search", "resurgence.goToColumn"]
 ];
 
 export const DEVELOPMENT_COMMAND_LABELS = [
@@ -66,6 +67,8 @@ const COMMAND_ACTIONS = new Map([
   ["undo", { type: "handler", name: "undo" }],
   ["redo", { type: "handler", name: "redo" }],
   ["search", { type: "handler", name: "showSearch" }],
+  ["search-column1", { type: "handler", name: "showFirstColumnSearch" }],
+  ["show-column-search", { type: "handler", name: "showColumnSearch" }],
   ["find-next", { type: "handler", name: "findNext" }],
   ["find-previous", { type: "handler", name: "findPrevious" }],
   ["replace", { type: "handler", name: "showReplace" }],

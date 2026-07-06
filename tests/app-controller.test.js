@@ -131,6 +131,13 @@ test("search matching is case-insensitive only, without whitespace normalization
   assert.deepEqual(findInTable(doc, "war cry", { row: 0, column: 0 }), { row: 3, column: 0 });
 });
 
+test("search can be limited to the first column", () => {
+  const doc = TableDocument.fromText("skills.txt", "skill\tref\nbash\tone\nzeal\ttwo\nwarcry\tthree");
+  assert.deepEqual(findInTable(doc, "zeal", { row: 0, column: 0 }, { onlyColumn: 0 }), { row: 2, column: 0 });
+  assert.deepEqual(findInTable(doc, "zeal", { row: 2, column: 0 }, { onlyColumn: 0 }), { row: 2, column: 0 });
+  assert.deepEqual(findInTable(doc, "warcry", { row: 1, column: 0 }, { onlyColumn: 0, includeStart: false }), { row: 3, column: 0 });
+});
+
 test("search can be limited to column titles", () => {
   const doc = TableDocument.fromText("skills.txt", "skill\tItemEffect\tmana\nbash\thit\t2\nzeal\thit\t3");
   assert.deepEqual(
@@ -229,6 +236,8 @@ test("command registry preserves public command labels and availability policy",
   assert.deepEqual(commandActionForId("toggle-freeze-row"), { type: "freeze", kind: "row" });
   assert.deepEqual(commandActionForId("resize-selected-fit"), { type: "resize", useSelection: true });
   assert.deepEqual(commandActionForId("save-all"), { type: "handler", name: "saveAll" });
+  assert.deepEqual(commandActionForId("show-column-search"), { type: "handler", name: "showColumnSearch" });
+  assert.deepEqual(commandActionForId("search-column1"), { type: "handler", name: "showFirstColumnSearch" });
   assert.deepEqual(commandActionForId("go-to-definition"), { type: "handler", name: "goToDefinition" });
   assert.deepEqual(commandActionForId("missing-command"), { type: "unknown", id: "missing-command" });
 });
@@ -1769,6 +1778,9 @@ test("Ctrl+B, Ctrl+L, and Ctrl+H use the shared panel and row-height reset paths
   assert.equal(globalShortcutAction({ key: "s", ctrlKey: true, shiftKey: true }), "save-all");
   assert.equal(globalShortcutAction({ key: "s", ctrlKey: true, altKey: true }), "save-as");
   assert.equal(globalShortcutAction({ key: "s", ctrlKey: true }), "save-file");
+  assert.equal(globalShortcutAction({ key: "f", ctrlKey: true, shiftKey: true }), "search-column1");
+  assert.equal(globalShortcutAction({ key: "f", ctrlKey: true }), "search");
+  assert.equal(globalShortcutAction({ key: "q", altKey: true }), "show-column-search");
   assert.equal(isEditorShortcutAllowed("h", true), true);
   assert.equal(isEditorShortcutAllowed("b", true), false);
   assert.equal(commandLabelsForEnvironment().some(([id, label]) => id === "reset-row-heights" && label === "Reset Row Heights"), true);
@@ -1934,7 +1946,8 @@ test("data-grid scroll shortcuts require an open document and non-text focus", (
     assert.equal(prevented, 6);
 
     listeners.get("keydown")({
-      key: "f",
+      // Resurgence binds Ctrl+Shift+F (Find in First Column); use an unbound combination here.
+      key: "j",
       ctrlKey: true,
       shiftKey: true,
       target: {},
