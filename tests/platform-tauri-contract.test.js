@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { TableDocument } from "../src/core/table-model.js";
 import {
+  isGlobalShortcutAllowedInTextInput,
   isTextInputTarget,
   shouldCloseSearchKey,
   shouldSubmitSearchKey
@@ -562,6 +563,10 @@ test("Find UI is a centered modal and text inputs keep native shortcuts", () => 
   assert.equal(shouldSubmitSearchKey("Escape"), false);
   assert.equal(shouldCloseSearchKey("Escape"), true);
   assert.equal(shouldCloseSearchKey("Enter"), false);
+  assert.equal(isGlobalShortcutAllowedInTextInput("search"), true);
+  assert.equal(isGlobalShortcutAllowedInTextInput("search-column1"), true);
+  assert.equal(isGlobalShortcutAllowedInTextInput("show-column-search"), true);
+  assert.equal(isGlobalShortcutAllowedInTextInput("save-file"), false);
   assert.match(css, /\.modal-backdrop\s*\{[\s\S]*align-items: center;[\s\S]*justify-content: center;/);
   assert.match(css, /\.search-modal\s*\{/);
 });

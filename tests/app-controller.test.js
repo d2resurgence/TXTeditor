@@ -82,6 +82,7 @@ import {
 } from "../src/ui/problems-policy.js";
 import {
   initialSearchState,
+  isGlobalShortcutAllowedInTextInput,
   searchScrollOptionsForScope,
   searchShouldIncludeStart,
   searchTargetForResult,
@@ -1114,6 +1115,12 @@ test("Find scope options submit the current search on Enter", () => {
   assert.deepEqual(selection.focus, { row: 2, column: 1 });
   assert.deepEqual(scrolls, [[2, 1, { preserveScrollLeft: true }]]);
   assert.equal(els.searchStatus.textContent, "Row R3 (title R3:C1)");
+});
+
+test("table search shortcuts stay available from other text inputs", () => {
+  assert.equal(isGlobalShortcutAllowedInTextInput("search"), true);
+  assert.equal(isGlobalShortcutAllowedInTextInput("show-column-search"), true);
+  assert.equal(isGlobalShortcutAllowedInTextInput("undo"), false);
 });
 
 test("settings windows treat Escape as a close key only", () => {

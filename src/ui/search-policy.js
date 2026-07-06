@@ -68,3 +68,9 @@ export function isTextInputTarget(target, ElementCtor = globalThis.Element) {
   if (!ElementCtor || !(target instanceof ElementCtor)) return false;
   return Boolean(target.closest("input, textarea, select, [contenteditable=''], [contenteditable='true']"));
 }
+
+const TEXT_INPUT_GLOBAL_SHORTCUTS = new Set(["search", "search-column1", "show-column-search"]);
+
+export function isGlobalShortcutAllowedInTextInput(action) {
+  return TEXT_INPUT_GLOBAL_SHORTCUTS.has(action);
+}

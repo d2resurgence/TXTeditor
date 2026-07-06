@@ -1,6 +1,6 @@
 import { isTauriRuntime } from "../../core/io.js";
 import { globalShortcutAction } from "../global-shortcut-policy.js";
-import { isTextInputTarget } from "../search-policy.js";
+import { isGlobalShortcutAllowedInTextInput, isTextInputTarget } from "../search-policy.js";
 
 export function createAppEventController({
   state,
@@ -106,7 +106,11 @@ export function createAppEventController({
     }
     const shortcutAction = globalShortcutAction(event, { editingCell });
     if (editingCell && !shortcutAction) return;
-    if (!editingCell && isTextInputTarget(event.target)) return;
+    if (
+      !editingCell
+      && isTextInputTarget(event.target)
+      && !isGlobalShortcutAllowedInTextInput(shortcutAction)
+    ) return;
     if (shortcutAction) return runGlobalShortcutAction(event, shortcutAction);
   }
 
