@@ -1567,6 +1567,26 @@ details:not([open]) .problem-file-header::before {
   border-color: var(--accent);
   background: var(--inputBg, var(--bg));
 }
+.skill-dup-table input.skill-dup-name-unchanged {
+  color: #f87171;
+  background: color-mix(in srgb, #ef4444 18%, var(--input-bg));
+  border-color: #ef4444;
+}
+
+.skill-dup-table input:focus.skill-dup-name-unchanged {
+  border-color: #ef4444;
+}
+
+.skill-dup-footer button:first-child:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.skill-dup-footer button:first-child:disabled:hover {
+  filter: none;
+}
+
 .skill-dup-table td.row-num input { width: 64px; }
 .skill-dup-table tr.skill-row td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
 
@@ -1794,6 +1814,10 @@ details:not([open]) .problem-file-header::before {
 
 .search-modal .modal-input {
   margin-bottom: 0;
+}
+
+.search-scope.hidden {
+  display: none;
 }
 
 .search-scope {
