@@ -444,7 +444,12 @@ skillDupController = createSkillDupController({
   grid,
   activeDoc,
   addDocument,
+  activateDocument: documentController.activateDocument,
+  applyFreezeToDoc,
+  stageDocumentView: documentController.stageDocumentView,
   applyCommandToDocument,
+  saveSelectionState,
+  commitActiveEdit: documentController.commitActiveEdit,
   renderChrome: () => shellController.renderChrome(),
   showToast,
   escapeHtml
@@ -508,11 +513,10 @@ function hasOpenDocument() {
 
 function saveSelectionState(doc = activeDoc()) {
   if (!hasOpenDocument() || doc === EMPTY_DOC || typeof state.selection.snapshot !== "function") return;
+  if (grid.doc !== doc) return;
   doc.selectionState = state.selection.snapshot();
-  if (grid.doc === doc) {
-    doc.scrollLeft = grid.scrollLeft;
-    doc.scrollTop = grid.scrollTop;
-  }
+  doc.scrollLeft = grid.scrollLeft;
+  doc.scrollTop = grid.scrollTop;
 }
 
 function activeUndo() {
@@ -545,21 +549,22 @@ function execute(command) {
   finishCommand(doc, command, "edit", started);
 }
 
-function applyCommandToDocument(doc, command) {
+function applyCommandToDocument(doc, command, options = {}) {
   if (!command || command.isEmpty) return;
   const started = perfNow();
   command.redo(doc);
   undoManagerForDocument(doc).push(command);
-  finishCommand(doc, command, "edit", started);
-  if (doc === activeDoc()) grid.draw();
+  finishCommand(doc, command, "edit", started, options);
+  if (doc === activeDoc() && !options.deferSideEffects) grid.draw();
 }
 
-function finishCommand(doc, command, context = "edit", started = perfNow()) {
+function finishCommand(doc, command, context = "edit", started = perfNow(), options = {}) {
+  const deferSideEffects = options.deferSideEffects === true;
   const contentChanged = command.contentChanged !== false;
   if (contentChanged) markLegacyLintDocChanged(doc);
-  keepSelectionOnVisibleRow({ doc, selection: state.selection, clamp });
-  saveSelectionState(doc);
-  grid.layout();
+  if (doc === activeDoc()) keepSelectionOnVisibleRow({ doc, selection: state.selection, clamp });
+  if (doc === activeDoc() && !deferSideEffects) saveSelectionState();
+  if (!deferSideEffects) grid.layout();
   const lspChange = context === "undo" ? command.undoLspChange ?? command.lspChange : command.lspChange;
   if (contentChanged && documentChangeSyncRoute(state.lint.engine) === "vector-update") {
     lspUpdateDoc(doc, lspChange).catch((error) => handleLspUpdateError(doc, error, context));
@@ -567,7 +572,7 @@ function finishCommand(doc, command, context = "edit", started = perfNow()) {
     scheduleLegacyLintForEdit(doc);
   }
   recordUiPerf("row-command", started, { changedRows: Array.isArray(lspChange) ? lspChange.length : lspChange?.rows?.length ?? 0, contentChanged });
-  renderChrome();
+  if (!deferSideEffects) renderChrome();
 }
 
 function applyEdits(edits, label = "Edit Cells") {

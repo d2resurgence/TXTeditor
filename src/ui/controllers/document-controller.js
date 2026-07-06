@@ -141,6 +141,81 @@ export function createDocumentController({
     }
   }
 
+  function activateDocument(doc) {
+    if (!doc) return;
+    const index = state.docs.indexOf(doc);
+    if (index < 0) return;
+    if (index !== state.active) {
+      saveSelectionState();
+      state.active = index;
+    }
+    applyFreezeToDoc(activeDoc());
+    if (grid.doc !== activeDoc()) grid.setDocument(activeDoc());
+    renderChrome();
+  }
+
+  function cloneSelectionSnapshot(snapshot) {
+    if (!snapshot) return null;
+    return {
+      anchor: { ...snapshot.anchor },
+      focus: { ...snapshot.focus },
+      ranges: snapshot.ranges.map((range) => ({
+        top: range.top,
+        left: range.left,
+        bottom: range.bottom,
+        right: range.right
+      }))
+    };
+  }
+
+  function stageDocumentView(doc, snapshot, focusRow, focusColumn) {
+    if (!doc || !snapshot) return;
+    const column = Math.max(0, focusColumn ?? 0);
+    const selectionSnapshot = cloneSelectionSnapshot({
+      ...snapshot,
+      focus: { row: focusRow, column }
+    });
+    doc.selectionState = selectionSnapshot;
+
+    if (grid.doc === doc) {
+      state.selection.restore(selectionSnapshot, doc.rowCount, doc.columnCount);
+      grid.layout();
+      grid.scrollCellIntoView(focusRow, column);
+      doc.scrollLeft = grid.scrollLeft;
+      doc.scrollTop = grid.scrollTop;
+      doc.selectionState = cloneSelectionSnapshot(state.selection.snapshot());
+      return;
+    }
+
+    const activeIndex = state.active;
+    const activeDocRef = state.docs[activeIndex];
+    if (!activeDocRef) return;
+
+    const activeSnapshot = cloneSelectionSnapshot(state.selection.snapshot());
+    const scrollLeft = grid.scrollLeft;
+    const scrollTop = grid.scrollTop;
+
+    grid.setDocument(doc);
+    state.selection.restore(selectionSnapshot, doc.rowCount, doc.columnCount);
+    grid.layout();
+    grid.scrollCellIntoView(focusRow, column);
+    doc.scrollLeft = grid.scrollLeft;
+    doc.scrollTop = grid.scrollTop;
+    doc.selectionState = cloneSelectionSnapshot(state.selection.snapshot());
+
+    state.active = activeIndex;
+    applyFreezeToDoc(activeDocRef);
+    grid.setDocument(activeDocRef);
+    if (activeSnapshot) {
+      state.selection.restore(activeSnapshot, activeDocRef.rowCount, activeDocRef.columnCount);
+    }
+    grid.host.scrollLeft = scrollLeft;
+    grid.host.scrollTop = scrollTop;
+    activeDocRef.scrollLeft = scrollLeft;
+    activeDocRef.scrollTop = scrollTop;
+    activeDocRef.selectionState = cloneSelectionSnapshot(state.selection.snapshot());
+  }
+
   async function addDocument(doc) {
     const plan = documentOpenPlan(state.docs, doc);
     if (plan.action === "activate-existing") {
@@ -436,9 +511,11 @@ export function createDocumentController({
   }
 
   return {
+    activateDocument,
     addDocument,
     askCloseChoice,
     closeTab,
+    commitActiveEdit,
     handleCloseDialogClick,
     hasOpenDocument,
     isTextLikeFile,
@@ -452,6 +529,7 @@ export function createDocumentController({
     saveAll,
     saveAs,
     saveFile,
+    stageDocumentView,
     wireCloseHandler
   };
 }

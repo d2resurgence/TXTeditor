@@ -17,7 +17,12 @@ export function createSkillDupController({
   grid,
   activeDoc,
   addDocument,
+  activateDocument,
+  applyFreezeToDoc,
+  stageDocumentView,
   applyCommandToDocument,
+  saveSelectionState,
+  commitActiveEdit,
   renderChrome,
   showToast,
   escapeHtml
@@ -174,11 +179,126 @@ export function createSkillDupController({
     return null;
   }
 
-  function applyRowWrite(doc, targetRow, values, label) {
+  function columnIndexForName(doc, columnName) {
+    const needle = columnName.toLowerCase();
+    for (let column = 0; column < doc.columnCount; column++) {
+      if (doc.getCell(0, column).trim().toLowerCase() === needle) return column;
+    }
+    return -1;
+  }
+
+  function unhideRows(doc, rows) {
+    let changed = false;
+    for (const row of rows) {
+      if (doc.hiddenRows?.has(row)) {
+        doc.hiddenRows.delete(row);
+        changed = true;
+      }
+    }
+    if (changed) doc.markViewChanged();
+  }
+
+  function resolveMissileFocusRow(doc, entries, appliedRows, sourceNameLower) {
+    const maxRow = Math.max(1, doc.rowCount - 1);
+    const rowFromEntry = (entry, applied) => {
+      if (entry.targetRow >= 1 && entry.targetRow <= maxRow) return entry.targetRow;
+      if (applied != null && applied >= 1 && applied <= maxRow) return Number(applied);
+      return null;
+    };
+
+    const sourceIndex = entries.findIndex((entry) => entry.originalName.toLowerCase() === sourceNameLower);
+    if (sourceIndex >= 0) {
+      const row = rowFromEntry(entries[sourceIndex], appliedRows[sourceIndex]);
+      if (row != null) return row;
+    }
+    for (let i = 0; i < entries.length; i++) {
+      const row = rowFromEntry(entries[i], appliedRows[i]);
+      if (row != null) return row;
+    }
+    return -1;
+  }
+
+  function missileRowsToFocus(doc, entries, appliedRows) {
+    const maxRow = Math.max(1, doc.rowCount - 1);
+    return [...new Set(entries.map((entry, index) => {
+      if (entry.targetRow >= 1 && entry.targetRow <= maxRow) return entry.targetRow;
+      const applied = appliedRows[index];
+      return applied != null ? Number(applied) : null;
+    }).filter((row) => row != null && Number.isFinite(row) && row >= 1 && row <= maxRow))].sort((a, b) => a - b);
+  }
+
+  function resolveAppliedRow(doc, entry, applied) {
+    const maxRow = Math.max(1, doc.rowCount - 1);
+    if (entry?.targetRow >= 1 && entry.targetRow <= maxRow) return entry.targetRow;
+    const row = Number(applied);
+    return Number.isFinite(row) && row >= 1 && row <= maxRow ? row : -1;
+  }
+
+  function buildSelectionSnapshot(doc, rows, column, focusRow) {
+    const lastCol = Math.max(0, doc.columnCount - 1);
+    const firstRow = rows[0];
+    const lastRow = rows[rows.length - 1];
+    const contiguous = lastRow - firstRow === rows.length - 1;
+    return {
+      anchor: { row: firstRow, column },
+      focus: { row: focusRow, column },
+      ranges: contiguous
+        ? [{ top: firstRow, left: 0, bottom: lastRow, right: lastCol }]
+        : rows.map((row) => ({ top: row, left: 0, bottom: row, right: lastCol }))
+    };
+  }
+
+  function activateDocumentTab(doc) {
+    const index = state.docs.indexOf(doc);
+    if (index < 0 || index === state.active) return;
+    saveSelectionState();
+    state.active = index;
+    applyFreezeToDoc(activeDoc());
+    grid.setDocument(activeDoc());
+  }
+
+  function focusCellInDocument(doc, row, columnName) {
+    const column = Math.max(0, columnIndexForName(doc, columnName));
+    const maxRow = Math.max(1, doc.rowCount - 1);
+    if (!(row >= 1 && row <= maxRow)) return false;
+
+    unhideRows(doc, [row]);
+    activateDocumentTab(doc);
+    if (grid.doc !== doc) grid.setDocument(doc);
+
+    state.selection.set(row, column);
+    saveSelectionState(doc);
+    grid.layout();
+    grid.scrollCellIntoView(row, column);
+    doc.scrollLeft = grid.scrollLeft;
+    doc.scrollTop = grid.scrollTop;
+    grid.draw();
+    els.host?.focus();
+    return true;
+  }
+
+  function stageRowsOnDocument(doc, rows, columnName) {
+    const column = Math.max(0, columnIndexForName(doc, columnName));
+    const maxRow = Math.max(1, doc.rowCount - 1);
+    const validRows = [...new Set(
+      rows.filter((row) => Number.isFinite(row) && row >= 1 && row <= maxRow)
+    )].sort((a, b) => a - b);
+    if (!validRows.length) return false;
+
+    unhideRows(doc, validRows);
+    const resolvedFocusRow = validRows[validRows.length - 1];
+    const snapshot = buildSelectionSnapshot(doc, validRows, column, resolvedFocusRow);
+    stageDocumentView(doc, snapshot, resolvedFocusRow, column);
+    return true;
+  }
+
+  function applyRowWrite(doc, targetRow, values, label, options = {}) {
     if (targetRow >= 1 && targetRow < doc.rowCount) {
       const edits = values.map((value, column) => ({ row: targetRow, column, value }));
-      applyCommandToDocument(doc, makeCellCommand(label, doc, edits));
-      return;
+      const command = makeCellCommand(label, doc, edits);
+      if (command.isEmpty) return null;
+      applyCommandToDocument(doc, command, options);
+      return targetRow;
     }
     const at = doc.rowCount;
     applyCommandToDocument(doc, makeCustomCommand(label, {
@@ -188,7 +308,8 @@ export function createSkillDupController({
       undo(target) {
         target.deleteRows(at, 1);
       }
-    }));
+    }), options);
+    return at;
   }
 
   async function resolve() {
@@ -241,6 +362,8 @@ export function createSkillDupController({
       }
       changeset = result;
       renderPreview(result);
+      activateDocument(skillsDoc);
+      els.skillDupNewName.focus();
     } catch (error) {
       showError(error instanceof Error ? error.message : String(error));
     }
@@ -262,6 +385,7 @@ export function createSkillDupController({
       return;
     }
     clearError();
+    commitActiveEdit?.();
     const isMissileMode = mode === "missile";
     const missilesDoc = findDocByName("Missiles.txt");
     if (!missilesDoc) {
@@ -271,15 +395,25 @@ export function createSkillDupController({
 
     const remap = buildMissileRemap(changeset);
     const label = isMissileMode ? "Duplicate Missile" : "Duplicate Skill";
+    const focusDoc = isMissileMode ? missilesDoc : findDocByName("Skills.txt");
+    const sourceName = els.skillDupSource.value.trim().toLowerCase();
 
+    if (!focusDoc) {
+      showError(`${isMissileMode ? "Missiles.txt" : "Skills.txt"} is no longer open.`);
+      return;
+    }
+
+    const writeOptions = { deferSideEffects: true };
+    const appliedMissileRows = [];
     for (const entry of changeset.missiles) {
       const origSkill = isMissileMode ? null : changeset.skill.originalName;
       const newSkill = isMissileMode ? null : changeset.skill.newName;
       const overrideId = readTargetId(missilesDoc, entry.targetRow) ?? String(missilesDoc.rowCount - 1);
       const values = buildMissileValues(missilesDoc, entry, remap, origSkill, newSkill, overrideId);
-      applyRowWrite(missilesDoc, entry.targetRow, values, `${label} - Missile`);
+      appliedMissileRows.push(applyRowWrite(missilesDoc, entry.targetRow, values, `${label} - Missile`, writeOptions));
     }
 
+    let appliedSkillRow = -1;
     if (!isMissileMode) {
       const skillsDoc = findDocByName("Skills.txt");
       if (!skillsDoc) {
@@ -288,13 +422,33 @@ export function createSkillDupController({
       }
       const overrideId = readTargetId(skillsDoc, changeset.skill.targetRow);
       const skillValues = buildSkillValues(skillsDoc, changeset.skill, remap, overrideId);
-      applyRowWrite(skillsDoc, changeset.skill.targetRow, skillValues, label);
+      appliedSkillRow = applyRowWrite(skillsDoc, changeset.skill.targetRow, skillValues, label, writeOptions);
     }
 
     const origName = isMissileMode ? changeset.missiles.at(-1)?.originalName : changeset.skill.originalName;
     const newName = isMissileMode ? changeset.missiles.at(-1)?.newName : changeset.skill.newName;
+    const missileRows = missileRowsToFocus(missilesDoc, changeset.missiles, appliedMissileRows);
+    const skillFocusRow = !isMissileMode
+      ? resolveAppliedRow(focusDoc, changeset.skill, appliedSkillRow)
+      : -1;
+    const missileFocusRow = isMissileMode
+      ? resolveMissileFocusRow(missilesDoc, changeset.missiles, appliedMissileRows, sourceName)
+      : -1;
+
     closeDialog();
+    grid.layout();
     grid.draw();
+
+    if (isMissileMode) {
+      focusCellInDocument(missilesDoc, missileFocusRow, "missile");
+    } else {
+      activateDocumentTab(focusDoc);
+      if (missileRows.length) {
+        stageRowsOnDocument(missilesDoc, missileRows, "missile");
+      }
+      focusCellInDocument(focusDoc, skillFocusRow, "skill");
+    }
+
     renderChrome();
     showToast(`Duplicated "${origName}" → "${newName}"`);
   }

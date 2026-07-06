@@ -132,6 +132,8 @@ export function createShellController({
     state.active = index;
     applyFreezeToDoc(activeDoc());
     grid.setDocument(activeDoc());
+    grid.scrollCellIntoView?.(state.selection.focus.row, state.selection.focus.column);
+    saveSelectionState();
     updateGridDiagnostics();
     renderChrome();
     scrollProblemsToActiveFile();
