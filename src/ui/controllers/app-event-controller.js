@@ -1,6 +1,6 @@
 import { isTauriRuntime } from "../../core/io.js";
 import { globalShortcutAction, gridScrollShortcutAction } from "../global-shortcut-policy.js";
-import { isTextInputTarget } from "../search-policy.js";
+import { isGlobalShortcutAllowedInTextInput, isTextInputTarget } from "../search-policy.js";
 import { showButtonClickFeedback } from "../button-feedback-policy.js";
 
 export function createAppEventController({
@@ -141,7 +141,7 @@ export function createAppEventController({
     } else if (!editingCell && isTextInputTarget(event.target)) {
       const findInOpenSearch = !els.searchPanel.classList.contains("hidden")
         && (shortcutAction === "find-next" || shortcutAction === "find-previous");
-      if (!findInOpenSearch) return;
+      if (!findInOpenSearch && !isGlobalShortcutAllowedInTextInput(shortcutAction)) return;
     }
     if (shortcutAction) return runGlobalShortcutAction(event, shortcutAction);
   }

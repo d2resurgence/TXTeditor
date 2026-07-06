@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { TableDocument } from "../src/core/table-model.js";
 import {
+  isGlobalShortcutAllowedInTextInput,
   isTextInputTarget,
   shouldCloseSearchKey,
   shouldSubmitSearchKey
@@ -761,6 +762,10 @@ test("text inputs keep native shortcuts and search keys preserve their actions",
   assert.equal(shouldSubmitSearchKey("Escape"), false);
   assert.equal(shouldCloseSearchKey("Escape"), true);
   assert.equal(shouldCloseSearchKey("Enter"), false);
+  assert.equal(isGlobalShortcutAllowedInTextInput("search"), true);
+  assert.equal(isGlobalShortcutAllowedInTextInput("search-column1"), true);
+  assert.equal(isGlobalShortcutAllowedInTextInput("show-column-search"), true);
+  assert.equal(isGlobalShortcutAllowedInTextInput("save-file"), false);
 });
 
 function deferredPlatformWrite() {
