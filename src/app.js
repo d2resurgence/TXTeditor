@@ -46,6 +46,7 @@ import { createLspController } from "./ui/controllers/lsp-controller.js";
 import { createSearchController } from "./ui/controllers/search-controller.js";
 import { createSettingsController } from "./ui/controllers/settings-controller.js";
 import { createShellController } from "./ui/controllers/shell-controller.js";
+import { createStringGotoController } from "./ui/controllers/string-goto-controller.js";
 const { state, savedTheme, savedGridFont, savedPanelState } = createInitialAppState({ storage: localStorage });
 const {
   uiPerfSamples,
@@ -138,6 +139,15 @@ syncDockLayout();
 let lspController = null;
 let shellController = null;
 let gridCommandController = null;
+let stringGotoController = null;
+const stringDefinitionBridge = {
+  cellHasReference: () => false,
+  tryNavigate: async () => false
+};
+const stringWorkspaceBridge = {
+  loadStringTablesForWorkspace: async () => {},
+  saveJsonStringViewIfNeeded: async () => false
+};
 const grid = new CanvasGrid({
   host: els.host,
   canvas: els.canvas,
@@ -203,7 +213,8 @@ lspController = createLspController({
   applyFreezeToDoc,
   updateActiveProblemHighlight,
   saveSelectionState,
-  lintPathKey
+  lintPathKey,
+  stringDefinition: stringDefinitionBridge
 });
 exposeTxteditorPerf(window, {
   uiPerfSamples,
@@ -260,7 +271,9 @@ const documentController = createDocumentController({
   isVectorLintEngine,
   isLegacyLintEngine,
   updateGridDiagnostics,
-  scrollProblemsToActiveFile
+  scrollProblemsToActiveFile,
+  loadStringTablesForWorkspace: (workspacePath) => stringWorkspaceBridge.loadStringTablesForWorkspace(workspacePath),
+  saveJsonStringViewIfNeeded: (doc) => stringWorkspaceBridge.saveJsonStringViewIfNeeded(doc)
 });
 const searchController = createSearchController({
   state,
@@ -382,6 +395,23 @@ shellController = createShellController({
   lintPathKey,
   escapeHtml
 });
+stringGotoController = createStringGotoController({
+  state,
+  grid,
+  activeDoc,
+  addDocument,
+  applyFreezeToDoc,
+  updateGridDiagnostics,
+  updateActiveProblemHighlight,
+  renderChrome: () => shellController.renderChrome(),
+  saveSelectionState,
+  els,
+  showToast
+});
+stringDefinitionBridge.cellHasReference = (row, col) => stringGotoController.cellHasStringReference(row, col);
+stringDefinitionBridge.tryNavigate = (row, col) => stringGotoController.tryGoToStringDefinition(row, col);
+stringWorkspaceBridge.loadStringTablesForWorkspace = (workspacePath) => stringGotoController.loadStringTablesForWorkspace(workspacePath);
+stringWorkspaceBridge.saveJsonStringViewIfNeeded = (doc) => stringGotoController.saveJsonStringViewIfNeeded(doc);
 const eventController = createAppEventController({
   state,
   els,

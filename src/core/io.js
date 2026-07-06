@@ -7,8 +7,10 @@ export {
   openNativePathsBulk,
   openWorkspaceNative,
   readFileAsDocument,
+  readRawTextFiles,
   saveDocumentNative,
-  saveTextNative
+  saveTextNative,
+  writeRawTextFile
 } from "./platform/file-io.js";
 export {
   closeWindow,

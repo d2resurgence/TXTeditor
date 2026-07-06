@@ -49,7 +49,9 @@ export function createDocumentController({
   isVectorLintEngine,
   isLegacyLintEngine,
   updateGridDiagnostics,
-  scrollProblemsToActiveFile
+  scrollProblemsToActiveFile,
+  loadStringTablesForWorkspace = async () => {},
+  saveJsonStringViewIfNeeded = async () => false
 }) {
   let pendingCloseResolve = null;
   const pendingSaves = new WeakMap();
@@ -190,6 +192,7 @@ export function createDocumentController({
       if (!workspace) return;
       state.workspace = workspace;
       resetLegacyWorkspaceIndex();
+      loadStringTablesForWorkspace(workspace.path).catch(() => {});
       if (isVectorLintEngine()) lspStartWorkspace(workspace.path).catch(showError);
       else {
         const schedule = legacyLintImmediateSchedule("workspace-opened");
@@ -219,6 +222,11 @@ export function createDocumentController({
 
   async function saveFileNow(doc) {
     if (isTauriRuntime()) {
+      if (await saveJsonStringViewIfNeeded(doc)) {
+        grid.draw();
+        renderChrome();
+        return true;
+      }
       const saved = await saveDocumentNative(doc, false);
       if (!saved) return false;
       grid.draw();

@@ -60,7 +60,7 @@ fn workspace_file_from_entry_path(
 fn is_text_like(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|value| value.to_str()).map(|value| value.to_ascii_lowercase()),
-        Some(ext) if matches!(ext.as_str(), "txt" | "tsv" | "tbl" | "csv")
+        Some(ext) if matches!(ext.as_str(), "txt" | "tsv" | "csv" | "json")
     )
 }
 
@@ -121,7 +121,7 @@ mod tests {
             unique
         ));
         fs::create_dir_all(root.join("nested")).unwrap();
-        fs::write(root.join("z.tbl"), "z").unwrap();
+        fs::write(root.join("z.json"), "z").unwrap();
         fs::write(root.join("a.txt"), "alpha").unwrap();
         fs::write(root.join("nested").join("m.tsv"), "middle").unwrap();
         fs::write(root.join("ignored.md"), "ignored").unwrap();
@@ -136,7 +136,7 @@ mod tests {
             vec![
                 "a.txt".to_string(),
                 "m.tsv".to_string(),
-                "z.tbl".to_string()
+                "z.json".to_string()
             ]
         );
         assert!(payload

@@ -195,8 +195,13 @@ export function createLspController({
   updateActiveProblemHighlight,
   saveSelectionState = () => {},
   lintPathKey,
-  lspHoverRequest
+  lspHoverRequest,
+  stringDefinition = null
 }) {
+  const stringGoTo = stringDefinition ?? {
+    cellHasReference: () => false,
+    tryNavigate: async () => false
+  };
   const lspReadiness = createLspReadinessState();
   const lspTraffic = createLspTrafficState();
   const hoverController = createLspHoverController({
@@ -624,57 +629,64 @@ export function createLspController({
   }
 
   async function goToDefinition() {
-    if (!isVectorLintEngine() || !state.lsp.started) return;
     const doc = activeDoc();
-    const uri = docToUri(doc);
-    if (!uri) return;
     const hit = state.contextHit;
     const row = hit?.row ?? state.selection.focus.row;
     const col = hit?.column ?? state.selection.focus.column;
-    const charOffset = computeCharOffset(doc, row, col);
-    let definitionFailed = false;
-    const result = await lspDefinition(uri, row, charOffset).catch((error) => {
-      definitionFailed = true;
-      reportDefinitionFailure(doc, uri, error, "go-to-definition");
-      return null;
-    });
-    if (definitionFailed) return;
-    if (!result) {
-      showToast("No definition found.");
-      return;
-    }
-    const targetPath = pathFromUri(result.uri);
-    if (!targetPath) return;
-    let index = state.docs.findIndex((d) => lintPathKey(d.path) === lintPathKey(targetPath));
-    if (index < 0 && isTauriRuntime()) {
-      const newDocs = await openNativePaths([targetPath], TableDocument).catch((error) => {
-        reportBackgroundFailure("Definition file open", error, "go-to-definition");
-        return [];
-      });
-      if (newDocs.length) {
-        await addDocument(newDocs[0]);
-        index = state.active;
+
+    if (isVectorLintEngine() && state.lsp.started) {
+      const uri = docToUri(doc);
+      if (uri) {
+        const charOffset = computeCharOffset(doc, row, col);
+        let definitionFailed = false;
+        const result = await lspDefinition(uri, row, charOffset).catch((error) => {
+          definitionFailed = true;
+          reportDefinitionFailure(doc, uri, error, "go-to-definition");
+          return null;
+        });
+        if (!definitionFailed && result) {
+          const targetPath = pathFromUri(result.uri);
+          if (targetPath) {
+            let index = state.docs.findIndex((d) => lintPathKey(d.path) === lintPathKey(targetPath));
+            if (index < 0 && isTauriRuntime()) {
+              const newDocs = await openNativePaths([targetPath], TableDocument).catch((error) => {
+                reportBackgroundFailure("Definition file open", error, "go-to-definition");
+                return [];
+              });
+              if (newDocs.length) {
+                await addDocument(newDocs[0]);
+                index = state.active;
+              }
+            }
+            if (index >= 0 && index !== state.active) {
+              state.active = index;
+              applyFreezeToDoc(activeDoc());
+              grid.setDocument(activeDoc());
+              updateGridDiagnostics();
+            }
+            const targetDoc = activeDoc();
+            const targetRow = clamp(result.line, 0, Math.max(0, targetDoc.rowCount - 1));
+            const targetCol = clamp(charOffsetToColumn(targetDoc, targetRow, result.character), 0, Math.max(0, targetDoc.columnCount - 1));
+            state.selection.set(targetRow, targetCol);
+            saveSelectionState();
+            grid.scrollCellIntoView(targetRow, targetCol);
+            grid.draw();
+            updateActiveProblemHighlight();
+            renderChrome();
+            els.host.focus();
+            return;
+          }
+        }
       }
     }
-    if (index >= 0 && index !== state.active) {
-      state.active = index;
-      applyFreezeToDoc(activeDoc());
-      grid.setDocument(activeDoc());
-      updateGridDiagnostics();
-    }
-    const targetDoc = activeDoc();
-    const targetRow = clamp(result.line, 0, Math.max(0, targetDoc.rowCount - 1));
-    const targetCol = clamp(charOffsetToColumn(targetDoc, targetRow, result.character), 0, Math.max(0, targetDoc.columnCount - 1));
-    state.selection.set(targetRow, targetCol);
-    saveSelectionState();
-    grid.scrollCellIntoView(targetRow, targetCol);
-    grid.draw();
-    updateActiveProblemHighlight();
-    renderChrome();
-    els.host.focus();
+
+    if (await stringGoTo.tryNavigate(row, col)) return;
+
+    showToast("No definition found.");
   }
 
-  function cellHasReference(_row, _col) {
+  function cellHasReference(row, col) {
+    if (stringGoTo.cellHasReference(row, col)) return true;
     if (!isVectorLintEngine() || !state.lsp.started) return false;
     return Boolean(docToUri(activeDoc()));
   }
