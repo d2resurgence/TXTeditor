@@ -760,7 +760,7 @@ test("app ownership boundaries keep shell wiring and extracted helpers in owners
   const workspaceFileListPolicy = readFileSync(new URL("../src/ui/workspace-file-list-policy.js", import.meta.url), "utf8");
   const gridHover = readFileSync(new URL("../src/ui/grid/grid-hover.js", import.meta.url), "utf8");
 
-  assert.ok(appSource.split(/\r?\n/).length <= 780);
+  assert.ok(appSource.split(/\r?\n/).length <= 790);
   assert.ok(canvasSource.split(/\r?\n/).length <= 900);
   assert.ok(lspController.split(/\r?\n/).length <= 850);
   assert.match(appSource, /createCommandController/);

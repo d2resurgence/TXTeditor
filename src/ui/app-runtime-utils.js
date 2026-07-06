@@ -32,7 +32,20 @@ export function createToastFeedback(els) {
     toastTimer = setTimeout(() => els.toast.classList.add("hidden"), 2600);
   }
 
-  return { showError, showToast };
+  function showPersistentToast(message) {
+    els.toast.textContent = message;
+    els.toast.classList.remove("hidden");
+    clearTimeout(toastTimer);
+    toastTimer = 0;
+  }
+
+  function hideToast() {
+    clearTimeout(toastTimer);
+    toastTimer = 0;
+    els.toast.classList.add("hidden");
+  }
+
+  return { showError, showToast, showPersistentToast, hideToast };
 }
 
 export async function writeClipboardText(text) {

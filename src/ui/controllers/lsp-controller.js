@@ -10,7 +10,8 @@ import {
   lspStart,
   lspUpdateFile,
   lspUpdateFileIncremental,
-  openNativePaths
+  openNativePaths,
+  openNativePathsBulk
 } from "../../core/io.js";
 import { diagnosticsForDocument } from "../../core/lint-engine.js";
 import {
@@ -187,6 +188,8 @@ export function createLspController({
   perfNow,
   showToast,
   showError,
+  showPersistentToast,
+  hideToast,
   setLintDiagnostics,
   updateGridDiagnostics,
   renderChrome,
@@ -291,6 +294,7 @@ export function createLspController({
       renderChrome();
       hoverController.retryQueuedHover("workspace-ready");
       hoverController.scheduleHoverPrewarm("workspace-ready");
+      preloadWorkspaceFiles().catch(() => {});
     } catch (error) {
       state.lsp.started = false;
       state.lsp.openFileCount = 0;
@@ -360,6 +364,35 @@ export function createLspController({
       docState.openPromise = null;
     });
     return docState.openPromise;
+  }
+
+  async function preloadWorkspaceFiles() {
+    if (!isVectorLintEngine() || !state.lsp.started) return;
+    if (!state.config?.lspPreloadEnabled || !state.workspace?.files?.length) return;
+    const openPaths = new Set(state.docs.map((doc) => doc.path).filter(Boolean));
+    const unopenedPaths = state.workspace.files
+      .map((file) => file.path)
+      .filter((path) => {
+        if (openPaths.has(path) || path.toLowerCase().endsWith(".tbl")) return false;
+        const skip = state.config.lspPreloadSkip;
+        if (!skip?.length) return true;
+        const base = path.split(/[\\/]/).pop().replace(/\.[^.]+$/, "").toLowerCase();
+        return !skip.some((entry) => base === String(entry).toLowerCase());
+      });
+    if (!unopenedPaths.length) return;
+    showPersistentToast("Loading workspace files…");
+    try {
+      const results = await openNativePathsBulk(unopenedPaths, TableDocument).catch(() => []);
+      const valid = results.filter((result) => result.doc);
+      for (let index = 0; index < valid.length; index++) {
+        const result = valid[index];
+        showPersistentToast(`Loading ${result.doc.name} ${index + 1}/${valid.length}`);
+        const uri = docToUri(result.doc);
+        if (uri) await lspOpenFile(uri, result.doc.toText()).catch(() => {});
+      }
+    } finally {
+      hideToast();
+    }
   }
 
   function reportOpenFailure(doc, error, context) {

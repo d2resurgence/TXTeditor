@@ -64,7 +64,7 @@ document.documentElement.style.setProperty("--sidebar-width", `${savedPanelState
 document.documentElement.style.setProperty("--problems-height", `${savedPanelState.problemsHeight}px`);
 
 const els = collectAppElements(document);
-const { showError, showToast } = createToastFeedback(els);
+const { showError, showToast, showPersistentToast, hideToast } = createToastFeedback(els);
 const askText = (options) => askPromptText({ ...options, escapeHtml, host: els.host });
 const promptNumber = (options) => promptForNumber({ ...options, askText });
 
@@ -212,6 +212,8 @@ lspController = createLspController({
   perfNow,
   showToast,
   showError,
+  showPersistentToast,
+  hideToast,
   setLintDiagnostics,
   updateGridDiagnostics,
   renderChrome,
@@ -484,7 +486,10 @@ const eventController = createAppEventController({
 renderChrome();
 eventController.wireEvents();
 wireCloseHandler().catch((error) => reportStartupFailure("Window close handler", error));
-settingsController.loadConfig().catch((error) => {
+settingsController.loadConfig().then(async () => {
+  if (!state.config) state.config = {};
+  await documentController.restoreLastWorkspace();
+}).catch((error) => {
   state.config = {};
   reportStartupFailure("Configuration load", error);
 });

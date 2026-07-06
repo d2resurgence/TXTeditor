@@ -1,3 +1,4 @@
+import { configuredAutofitColumnIndexes } from "../../core/autofit-columns-policy.js";
 import { TableDocument } from "../../core/table-model.js";
 import { LARGE_FILE_THRESHOLDS } from "../../core/large-file-policy.js";
 import { markTableSaved, tableFileState } from "../../core/table-file-state.js";
@@ -8,8 +9,10 @@ import {
   isTauriRuntime,
   openFilesNative,
   openNativePaths,
+  openWorkspaceFromPath,
   openWorkspaceNative,
   readFileAsDocument,
+  saveConfig,
   saveDocumentNative
 } from "../../core/io.js";
 import {
@@ -100,6 +103,44 @@ export function createDocumentController({
     }
   }
 
+  async function applyConfiguredAutofit(doc) {
+    const columns = configuredAutofitColumnIndexes(doc, state.config?.autofitColumns ?? {});
+    if (!columns.length || typeof grid.measureColumnFitWidth !== "function") return;
+    const wasDirty = doc.dirty;
+    const widths = await Promise.all(columns.map((column) => grid.measureColumnFitWidth(column, { yieldEvery: 0 })));
+    columns.forEach((column, index) => doc.setColumnWidth(column, widths[index]));
+    doc.dirty = wasDirty;
+  }
+
+  async function applyWorkspace(workspace) {
+    state.workspace = workspace;
+    resetLegacyWorkspaceIndex();
+    state.config = { ...(state.config ?? {}), lastWorkspacePath: workspace.path };
+    saveConfig(state.config).catch(() => {});
+    loadStringTablesForWorkspace(workspace.path).catch(() => {});
+    if (isVectorLintEngine()) {
+      await lspStartWorkspace(workspace.path).catch(showError);
+    } else {
+      const schedule = legacyLintImmediateSchedule("workspace-opened");
+      scheduleLegacyLintFull(schedule.reason, schedule.delay);
+    }
+    renderChrome();
+  }
+
+  async function restoreLastWorkspace() {
+    if (!isTauriRuntime()) return false;
+    const { restoreWorkspace, lastWorkspacePath } = state.config ?? {};
+    if (!restoreWorkspace || !lastWorkspacePath) return false;
+    try {
+      const workspace = await openWorkspaceFromPath(lastWorkspacePath);
+      if (!workspace) return false;
+      await applyWorkspace(workspace);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async function addDocument(doc) {
     const plan = documentOpenPlan(state.docs, doc);
     if (plan.action === "activate-existing") {
@@ -124,6 +165,7 @@ export function createDocumentController({
     }
     if (!doc.largeFileMode && !doc.initialColumnFitApplied) {
       grid.autoFitInitialColumns();
+      await applyConfiguredAutofit(doc);
       doc.initialColumnFitApplied = true;
       grid.layout();
     }
@@ -191,15 +233,7 @@ export function createDocumentController({
       }
       const workspace = await openWorkspaceNative();
       if (!workspace) return;
-      state.workspace = workspace;
-      resetLegacyWorkspaceIndex();
-      loadStringTablesForWorkspace(workspace.path).catch(() => {});
-      if (isVectorLintEngine()) lspStartWorkspace(workspace.path).catch(showError);
-      else {
-        const schedule = legacyLintImmediateSchedule("workspace-opened");
-        scheduleLegacyLintFull(schedule.reason, schedule.delay);
-      }
-      renderChrome();
+      await applyWorkspace(workspace);
     } catch (error) {
       showError(error);
     }
@@ -414,6 +448,7 @@ export function createDocumentController({
     openDroppedNativePaths,
     openFile,
     openFolder,
+    restoreLastWorkspace,
     saveAll,
     saveAs,
     saveFile,

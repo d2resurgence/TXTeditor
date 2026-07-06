@@ -1,5 +1,6 @@
 use crate::native_paths::file_path_to_string;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -20,6 +21,18 @@ pub(crate) struct AppConfig {
     pub(crate) plugin_path: Option<String>,
     #[serde(default)]
     pub(crate) debug_logging: bool,
+    #[serde(default)]
+    pub(crate) restore_workspace: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) last_workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) strings_path: Option<String>,
+    #[serde(default)]
+    pub(crate) lsp_preload_enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) lsp_preload_skip: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) autofit_columns: Option<Value>,
 }
 
 pub(crate) struct AppConfigState {
@@ -94,6 +107,7 @@ mod tests {
             schema_version: Some("3.2".to_string()),
             plugin_path: None,
             debug_logging: true,
+            ..Default::default()
         };
         let json = serde_json::to_string(&config).unwrap();
 
@@ -115,7 +129,7 @@ mod tests {
         let path = dir.join("config.json");
         fs::write(
             &path,
-            r#"{"vectorLspPath":"E:\\Tools\\vector-lsp.exe","lintMode":"basic","debugLogging":true}"#,
+            r#"{"vectorLspPath":"E:\\Tools\\vector-lsp.exe","lintMode":"basic","debugLogging":true,"restoreWorkspace":true,"lastWorkspacePath":"D:\\mods","stringsPath":"D:\\strings","lspPreloadEnabled":true,"lspPreloadSkip":["AiParms"],"autofitColumns":{"*":true}}"#,
         )
         .unwrap();
 
@@ -126,6 +140,12 @@ mod tests {
         );
         assert_eq!(config.lint_mode.as_deref(), Some("basic"));
         assert_eq!(config.debug_logging, true);
+        assert_eq!(config.restore_workspace, true);
+        assert_eq!(config.last_workspace_path.as_deref(), Some("D:\\mods"));
+        assert_eq!(config.strings_path.as_deref(), Some("D:\\strings"));
+        assert_eq!(config.lsp_preload_enabled, true);
+        assert_eq!(config.lsp_preload_skip.as_deref(), Some(&["AiParms".to_string()][..]));
+        assert_eq!(config.autofit_columns.as_ref().and_then(|v| v.get("*")).and_then(|v| v.as_bool()), Some(true));
 
         let _ = fs::remove_dir_all(&dir);
     }

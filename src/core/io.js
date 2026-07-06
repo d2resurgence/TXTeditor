@@ -5,6 +5,7 @@ export {
   openFilesNative,
   openNativePaths,
   openNativePathsBulk,
+  openWorkspaceFromPath,
   openWorkspaceNative,
   readFileAsDocument,
   readRawTextFiles,
