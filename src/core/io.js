@@ -8,6 +8,7 @@ export {
   openWorkspaceFromPath,
   openWorkspaceNative,
   readFileAsDocument,
+  readFileModifiedTimes,
   readRawTextFiles,
   saveDocumentNative,
   saveTextNative,

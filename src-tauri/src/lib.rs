@@ -18,6 +18,7 @@ pub fn run() {
             file_io::open_folder_dialog,
             file_io::save_file_dialog,
             file_io::read_text_files,
+            file_io::file_modified_times,
             file_io::write_text_file_safe,
             file_io::write_text_file_chunk_safe,
             workspace_files::list_workspace_files,

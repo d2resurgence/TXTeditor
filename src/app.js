@@ -37,6 +37,7 @@ import { createCommandController } from "./ui/controllers/command-controller.js"
 import { createCommandSurfaceController } from "./ui/controllers/command-surface-controller.js";
 import { createDiagnosticsController } from "./ui/controllers/diagnostics-controller.js";
 import { createDocumentController } from "./ui/controllers/document-controller.js";
+import { createAppExternalFileWatchBridge } from "./ui/app-external-file-watch.js";
 import { createDockController } from "./ui/controllers/dock-controller.js";
 import { createAppEventController } from "./ui/controllers/app-event-controller.js";
 import { createEditCommandController } from "./ui/controllers/edit-command-controller.js";
@@ -254,6 +255,7 @@ const settingsController = createSettingsController({
   showError,
   escapeHtml
 });
+const externalFileWatch = createAppExternalFileWatchBridge({ state, els });
 const documentController = createDocumentController({
   state,
   els,
@@ -282,8 +284,12 @@ const documentController = createDocumentController({
   updateGridDiagnostics,
   scrollProblemsToActiveFile,
   loadStringTablesForWorkspace: (workspacePath) => stringWorkspaceBridge.loadStringTablesForWorkspace(workspacePath),
-  saveJsonStringViewIfNeeded: (doc) => stringWorkspaceBridge.saveJsonStringViewIfNeeded(doc)
+  saveJsonStringViewIfNeeded: (doc) => stringWorkspaceBridge.saveJsonStringViewIfNeeded(doc),
+  syncExternalFileBaseline: (doc) => externalFileWatch.syncExternalFileBaseline(doc),
+  forgetExternalFileWatch: (doc) => externalFileWatch.forgetExternalFileWatch(doc),
+  resolveExternalFileChangeAfterReload: (doc) => externalFileWatch.resolveExternalFileChangeAfterReload(doc)
 });
+externalFileWatch.attach(documentController);
 const searchController = createSearchController({
   state,
   els,

@@ -1751,6 +1751,48 @@ details:not([open]) .problem-file-header::before {
   display: none;
 }
 
+.external-change-banner {
+  position: fixed;
+  z-index: 41;
+  right: 16px;
+  bottom: 34px;
+  display: flex;
+  max-width: min(520px, calc(100vw - 32px));
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-3);
+  color: var(--text);
+  box-shadow: 0 10px 32px var(--shadow);
+}
+
+.external-change-banner.hidden {
+  display: none;
+}
+
+.external-change-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.external-change-actions button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--button-border);
+  border-radius: 5px;
+  background: var(--button-bg);
+  color: var(--text);
+}
+
+.external-change-actions button:first-child {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

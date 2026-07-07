@@ -5,7 +5,33 @@ use std::fs::OpenOptions;
 use std::io;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 use tauri_plugin_dialog::DialogExt;
+
+#[derive(Serialize)]
+pub(crate) struct FileModifiedTime {
+    pub path: String,
+    pub modified_ms: Option<u64>,
+}
+
+fn file_modified_ms(path: &Path) -> Option<u64> {
+    fs::metadata(path)
+        .ok()
+        .and_then(|value| value.modified().ok())
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+        .map(|value| value.as_millis().min(u64::MAX as u128) as u64)
+}
+
+#[tauri::command]
+pub(crate) fn file_modified_times(paths: Vec<String>) -> Vec<FileModifiedTime> {
+    paths
+        .into_iter()
+        .map(|path| FileModifiedTime {
+            modified_ms: file_modified_ms(Path::new(&path)),
+            path,
+        })
+        .collect()
+}
 
 #[tauri::command]
 pub(crate) async fn open_files_dialog(app: tauri::AppHandle) -> Result<Vec<String>, String> {
@@ -426,6 +452,28 @@ mod tests {
             .filter(|entry| entry.file_name().to_string_lossy().contains(".bak."))
             .count();
         assert_eq!(backup_count, 0);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn file_modified_times_returns_mtimes_in_request_order() {
+        let dir =
+            std::env::temp_dir().join(format!("txteditor-mtime-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let first = dir.join("a.txt");
+        let missing = dir.join("missing.txt");
+        fs::write(&first, "a\n").unwrap();
+
+        let results = file_modified_times(vec![
+            first.to_string_lossy().to_string(),
+            missing.to_string_lossy().to_string(),
+        ]);
+
+        assert_eq!(results.len(), 2);
+        assert!(results[0].modified_ms.is_some());
+        assert_eq!(results[1].modified_ms, None);
 
         let _ = fs::remove_dir_all(&dir);
     }

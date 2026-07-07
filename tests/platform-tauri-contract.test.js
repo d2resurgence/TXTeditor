@@ -98,7 +98,9 @@ test("Legacy Lint workspace loading uses bulk native reads and cache signatures"
   const otherDoc = TableDocument.fromText("Skills.txt", "skill\n1", { path: "Data/Skills.txt" });
   assert.deepEqual(mergeOpenLegacyWorkspaceDocs([workspaceDoc, otherDoc], [openDoc]), [openDoc, otherDoc]);
   assert.match(rustFileIo, /fn read_text_files\(paths: Vec<String>\) -> Vec<Result<TextFilePayload, String>>/);
+  assert.match(rustFileIo, /fn file_modified_times\(paths: Vec<String>\) -> Vec<FileModifiedTime>/);
   assert.match(rust, /file_io::read_text_files,/);
+  assert.match(rust, /file_io::file_modified_times,/);
   assert.match(rust, /workspace_files::list_workspace_files,/);
   assert.match(rustWorkspaceFiles, /modified_ms: Option<u64>/);
   const results = await openNativePathsBulk(["a.txt", "bad.txt"], TableDocument, async (command, args) => {
@@ -220,6 +222,7 @@ test("Tauri command boundary preserves JS invoke names and Rust registrations", 
 
   assert.deepEqual([...new Set(jsCommands)], [
     "close_window",
+    "file_modified_times",
     "get_config",
     "list_workspace_files",
     "lsp_close_file",

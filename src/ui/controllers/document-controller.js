@@ -64,7 +64,10 @@ export function createDocumentController({
   updateGridDiagnostics,
   scrollProblemsToActiveFile,
   loadStringTablesForWorkspace = async () => {},
-  saveJsonStringViewIfNeeded = async () => false
+  saveJsonStringViewIfNeeded = async () => false,
+  syncExternalFileBaseline = async () => {},
+  forgetExternalFileWatch = () => {},
+  resolveExternalFileChangeAfterReload = () => {}
 }) {
   let pendingCloseResolve = null;
   const pendingSaves = new WeakMap();
@@ -255,6 +258,7 @@ export function createDocumentController({
     }
     renderChrome();
     scrollProblemsToActiveFile();
+    syncExternalFileBaseline(doc).catch(() => {});
     if (doc.largeFileMode) return;
     if (documentOpenSyncRoute(state.lint.engine) === "vector-open") {
       lspOpenDoc(doc).catch((error) => reportLspOpenFailure(doc, error, "document-open"));
@@ -344,12 +348,14 @@ export function createDocumentController({
       if (await saveJsonStringViewIfNeeded(doc)) {
         grid.draw();
         renderChrome();
+        syncExternalFileBaseline(doc).catch(() => {});
         return true;
       }
       const saved = await saveDocumentNative(doc, false);
       if (!saved) return false;
       grid.draw();
       renderChrome();
+      syncExternalFileBaseline(doc).catch(() => {});
       return true;
     }
     const revision = tableFileState(doc).revision;
@@ -358,6 +364,7 @@ export function createDocumentController({
     await writable.close();
     markTableSaved(doc, revision);
     renderChrome();
+    syncExternalFileBaseline(doc).catch(() => {});
     return true;
   }
 
@@ -406,6 +413,7 @@ export function createDocumentController({
       if (!saved) return false;
       grid.draw();
       renderChrome();
+      syncExternalFileBaseline(doc).catch(() => {});
       return true;
     } else if ("showSaveFilePicker" in window) {
       const handle = await window.showSaveFilePicker({ suggestedName: doc.name });
@@ -417,6 +425,7 @@ export function createDocumentController({
       doc.name = handle.name ?? doc.name;
       markTableSaved(doc, revision);
       renderChrome();
+      syncExternalFileBaseline(doc).catch(() => {});
       return true;
     } else {
       const revision = tableFileState(doc).revision;
@@ -457,6 +466,7 @@ export function createDocumentController({
     }
     if (isVectorLintEngine()) lspCloseDoc(doc).catch((error) => reportLspCloseFailure(doc, error, "tab-close"));
     else cancelLegacyLintJobs({ clearDiagnostics: false });
+    forgetExternalFileWatch(doc);
     const documentCountBeforeClose = state.docs.length;
     state.docs.splice(index, 1);
     if (!state.docs.length) {
@@ -602,6 +612,8 @@ export function createDocumentController({
       updateGridDiagnostics();
       renderChrome();
       if (isActive) scrollProblemsToActiveFile();
+      syncExternalFileBaseline(freshDoc).catch(() => {});
+      resolveExternalFileChangeAfterReload(freshDoc);
       return true;
     } catch (error) {
       showError(error);
@@ -686,6 +698,10 @@ export function createDocumentController({
     return text.startsWith("Large file mode:") || text.startsWith("Opening ");
   }
 
+  function isSavePending(doc) {
+    return pendingSaves.has(doc);
+  }
+
   return {
     activateDocument,
     addDocument,
@@ -694,6 +710,7 @@ export function createDocumentController({
     commitActiveEdit,
     handleCloseDialogClick,
     hasOpenDocument,
+    isSavePending,
     isTextLikeFile,
     isTextLikePath,
     loadFixture,
@@ -703,6 +720,7 @@ export function createDocumentController({
     openFolder,
     restoreLastWorkspace,
     reloadAll,
+    reloadDocumentAtIndex,
     reloadFile,
     saveAll,
     saveAs,

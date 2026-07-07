@@ -88,6 +88,12 @@ export async function readRawTextFiles(paths) {
   }));
 }
 
+export async function readFileModifiedTimes(paths) {
+  if (!isTauriRuntime() || !paths.length) return [];
+  const api = await tauriApi();
+  return api.invoke("file_modified_times", { paths });
+}
+
 export async function writeRawTextFile(path, text) {
   const api = await tauriApi();
   return api.invoke("write_text_file_safe", { path, text });
