@@ -1,5 +1,6 @@
 import {
   columnCommandItems,
+  deleteRowMenuItem,
   fillCommandItems,
   mathCommandItems,
   rowCommandItems,
@@ -81,6 +82,7 @@ export function createCommandSurfaceController({
         : []),
       ...extraContextMenuEntries({ focusRow, focusCol, doc: activeDoc() }),
       insertRowMenuEntry(),
+      deleteRowMenuItem(),
       { type: "submenu", label: tText("menu.columnOperations"), items: columnItems() },
       { type: "submenu", label: tText("menu.rowOperations"), items: rowItems() },
       { id: "resize-fit", label: tText("menu.resizeToFit") },
