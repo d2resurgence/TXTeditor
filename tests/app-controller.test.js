@@ -238,6 +238,8 @@ test("command registry preserves public command labels and availability policy",
   assert.deepEqual(commandActionForId("toggle-freeze-row"), { type: "freeze", kind: "row" });
   assert.deepEqual(commandActionForId("resize-selected-fit"), { type: "resize", useSelection: true });
   assert.deepEqual(commandActionForId("save-all"), { type: "handler", name: "saveAll" });
+  assert.deepEqual(commandActionForId("reload-file"), { type: "handler", name: "reloadFile" });
+  assert.deepEqual(commandActionForId("reload-all"), { type: "handler", name: "reloadAll" });
   assert.deepEqual(commandActionForId("show-column-search"), { type: "handler", name: "showColumnSearch" });
   assert.deepEqual(commandActionForId("search-column1"), { type: "handler", name: "showFirstColumnSearch" });
   assert.deepEqual(commandActionForId("go-to-definition"), { type: "handler", name: "goToDefinition" });

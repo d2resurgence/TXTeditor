@@ -9,12 +9,15 @@ import {
   isTauriRuntime,
   openFilesNative,
   openNativePaths,
+  openNativePathsBulk,
   openWorkspaceFromPath,
   openWorkspaceNative,
   readFileAsDocument,
+  readRawTextFiles,
   saveConfig,
   saveDocumentNative
 } from "../../core/io.js";
+import { isJsonStringView, tableDocumentFromJsonStrings } from "../../core/string-goto-policy.js";
 import {
   LINT_ENGINE_VECTOR,
   documentOpenSyncRoute,
@@ -26,6 +29,12 @@ import {
   documentOpenPlan,
   unsavedDocuments
 } from "../document-lifecycle-policy.js";
+import {
+  applyDocumentViewState,
+  canReloadDocument,
+  reloadDialogMessage,
+  snapshotDocumentViewState
+} from "../document-reload-policy.js";
 
 export function createDocumentController({
   state,
@@ -467,11 +476,178 @@ export function createDocumentController({
   }
 
   function askCloseChoice(doc) {
-    els.closeDialogText.textContent = closeDialogMessage(doc);
+    return askDiscardChoice(doc, closeDialogMessage(doc));
+  }
+
+  function askReloadChoice(doc) {
+    return askDiscardChoice(doc, reloadDialogMessage(doc));
+  }
+
+  function askDiscardChoice(doc, message) {
+    els.closeDialogText.textContent = message;
     els.closeDialog.classList.remove("hidden");
     return new Promise((resolve) => {
       pendingCloseResolve = resolve;
     });
+  }
+
+  async function readDocumentFromDisk(oldDoc) {
+    if (isJsonStringView(oldDoc)) {
+      const [result] = await readRawTextFiles([oldDoc.path]);
+      if (!result?.text) throw new Error(`Could not reload ${oldDoc.name}.`);
+      return tableDocumentFromJsonStrings(oldDoc.name, oldDoc.path, result.text);
+    }
+    if (isTauriRuntime()) {
+      const [result] = await openNativePathsBulk([oldDoc.path], TableDocument);
+      if (result?.error) throw new Error(result.error);
+      if (!result?.doc) throw new Error(`Could not reload ${oldDoc.name}.`);
+      return result.doc;
+    }
+    if (oldDoc.handle?.getFile) {
+      const file = await oldDoc.handle.getFile();
+      const doc = await readFileAsDocument(file, TableDocument);
+      doc.handle = oldDoc.handle;
+      return doc;
+    }
+    throw new Error(`Save ${oldDoc.name} before reloading.`);
+  }
+
+  async function reloadDocumentAtIndex(index, { quiet = false } = {}) {
+    if (index < 0 || index >= state.docs.length) return false;
+    const oldDoc = state.docs[index];
+    if (!canReloadDocument(oldDoc)) {
+      if (!quiet) showError(`Save ${oldDoc.name} before reloading.`);
+      return false;
+    }
+    if (oldDoc.dirty) {
+      const previous = state.active;
+      if (index !== previous) {
+        state.active = index;
+        applyFreezeToDoc(activeDoc());
+        grid.setDocument(activeDoc());
+        renderChrome();
+      }
+      const choice = await askReloadChoice(oldDoc);
+      if (choice === "cancel") {
+        if (index !== previous) {
+          state.active = previous;
+          applyFreezeToDoc(activeDoc());
+          grid.setDocument(activeDoc());
+          renderChrome();
+        }
+        return false;
+      }
+      if (choice === "save") {
+        const saved = await saveFile();
+        if (index !== previous) {
+          state.active = previous;
+          applyFreezeToDoc(activeDoc());
+          grid.setDocument(activeDoc());
+          renderChrome();
+        }
+        if (!saved || oldDoc.dirty) return false;
+      } else if (choice !== "discard") {
+        if (index !== previous) {
+          state.active = previous;
+          applyFreezeToDoc(activeDoc());
+          grid.setDocument(activeDoc());
+          renderChrome();
+        }
+        return false;
+      } else if (index !== previous) {
+        state.active = previous;
+        applyFreezeToDoc(activeDoc());
+        grid.setDocument(activeDoc());
+        renderChrome();
+      }
+    }
+    try {
+      if (oldDoc === activeDoc() && oldDoc.fileSizeBytes >= LARGE_FILE_THRESHOLDS.fileSizeBytes) {
+        await showOpeningFeedback(`Reloading large file: ${oldDoc.name}...`);
+      }
+      const view = snapshotDocumentViewState(oldDoc);
+      const freshDoc = await readDocumentFromDisk(oldDoc);
+      applyDocumentViewState(freshDoc, view);
+      if (isJsonStringView(oldDoc)) freshDoc._isJsonStringView = true;
+      resetUndoManagerForDocument(freshDoc);
+      if (isVectorLintEngine()) {
+        await lspCloseDoc(oldDoc).catch((error) => reportLspCloseFailure(oldDoc, error, "document-reload"));
+      }
+      state.docs[index] = freshDoc;
+      const isActive = index === state.active;
+      if (isActive) {
+        applyFreezeToDoc(freshDoc);
+        grid.setDocument(freshDoc);
+        if (freshDoc.selectionState) {
+          state.selection.restore(freshDoc.selectionState, freshDoc.rowCount, freshDoc.columnCount);
+        }
+        if (freshDoc.scrollLeft != null) grid.host.scrollLeft = freshDoc.scrollLeft;
+        if (freshDoc.scrollTop != null) grid.host.scrollTop = freshDoc.scrollTop;
+        grid.layout();
+        grid.draw();
+      }
+      if (freshDoc.largeFileMode) {
+        if (isActive) state.lint.status = `Large file mode: lint paused for ${freshDoc.name}.`;
+      } else if (isOpenStatus(state.lint.status)) {
+        state.lint.status = "";
+      }
+      if (!freshDoc.largeFileMode) {
+        if (documentOpenSyncRoute(state.lint.engine) === "vector-open") {
+          lspOpenDoc(freshDoc).catch((error) => reportLspOpenFailure(freshDoc, error, "document-reload"));
+          if (isActive) scheduleHoverPrewarm("document-reloaded");
+        } else {
+          scheduleLegacyLintFull("document-reloaded", 0);
+        }
+      }
+      updateGridDiagnostics();
+      renderChrome();
+      if (isActive) scrollProblemsToActiveFile();
+      return true;
+    } catch (error) {
+      showError(error);
+      return false;
+    }
+  }
+
+  async function reloadFile() {
+    if (!hasOpenDocument()) {
+      showError("No file is open.");
+      return false;
+    }
+    commitActiveEdit();
+    saveSelectionState();
+    const reloaded = await reloadDocumentAtIndex(state.active);
+    if (reloaded) showToast(`Reloaded ${activeDoc().name}.`);
+    return reloaded;
+  }
+
+  async function reloadAll() {
+    if (!hasOpenDocument()) return;
+    commitActiveEdit();
+    saveSelectionState();
+    const previous = state.active;
+    let reloaded = 0;
+    let failed = 0;
+    let skipped = 0;
+    for (let i = 0; i < state.docs.length; i++) {
+      if (!canReloadDocument(state.docs[i])) {
+        skipped++;
+        continue;
+      }
+      const ok = await reloadDocumentAtIndex(i, { quiet: true });
+      if (ok) reloaded++;
+      else if (state.docs[i]?.dirty) failed++;
+    }
+    state.active = previous;
+    applyFreezeToDoc(activeDoc());
+    grid.setDocument(activeDoc());
+    grid.draw();
+    renderChrome();
+    if (reloaded > 0) showToast(`Reloaded ${reloaded} file(s).`);
+    if (failed > 0) showError(`${failed} file(s) could not be reloaded.`);
+    else if (reloaded === 0 && skipped === state.docs.length) {
+      showError("No saved files are open to reload.");
+    }
   }
 
   function commitActiveEdit() {
@@ -526,6 +702,8 @@ export function createDocumentController({
     openFile,
     openFolder,
     restoreLastWorkspace,
+    reloadAll,
+    reloadFile,
     saveAll,
     saveAs,
     saveFile,

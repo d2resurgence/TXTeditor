@@ -338,6 +338,8 @@ const commandController = createCommandController({
     openFolder: documentController.openFolder,
     saveFile: documentController.saveFile,
     saveAll: documentController.saveAll,
+    reloadFile: documentController.reloadFile,
+    reloadAll: documentController.reloadAll,
     saveAs: documentController.saveAs,
     undo,
     redo,
