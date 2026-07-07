@@ -410,6 +410,8 @@ const commandController = createCommandController({
     saveWorkspaceProfile: documentController.saveWorkspaceProfile,
     saveFile: documentController.saveFile,
     saveAll: documentController.saveAll,
+    reloadFile: documentController.reloadFile,
+    reloadAll: documentController.reloadAll,
     saveAs: documentController.saveAs,
     undo,
     redo,

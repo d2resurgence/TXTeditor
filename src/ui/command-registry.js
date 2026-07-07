@@ -17,7 +17,8 @@ export const COMMAND_LABELS_BASE = [
   ["resize-fit", "command.resize-fit"], ["resize-selected-fit", "command.resize-selected-fit"], ["reset-row-heights", "command.reset-row-heights"], ["toggle-sidebar", "command.toggle-sidebar"], ["toggle-theme", "command.toggle-theme"],
   ["open-app-settings", "command.open-app-settings"], ["open-shortcut-settings", "command.open-shortcut-settings"], ["open-settings", "command.open-settings"],
   ["duplicate-skill", "resurgence.duplicateSkill"], ["duplicate-missile", "resurgence.duplicateMissile"], ["save-all", "resurgence.saveAll"],
-  ["search-column1", "resurgence.findInFirstColumn"], ["show-column-search", "resurgence.goToColumn"]
+  ["search-column1", "resurgence.findInFirstColumn"], ["show-column-search", "resurgence.goToColumn"],
+  ["reload-file", "resurgence.reload"], ["reload-all", "resurgence.reloadAll"]
 ];
 
 export const DEVELOPMENT_COMMAND_LABELS = [
@@ -61,6 +62,8 @@ const COMMAND_ACTIONS = new Map([
   ["close-all", { type: "handler", name: "closeAll" }],
   ["save-file", { type: "handler", name: "saveFile" }],
   ["save-all", { type: "handler", name: "saveAll" }],
+  ["reload-file", { type: "handler", name: "reloadFile" }],
+  ["reload-all", { type: "handler", name: "reloadAll" }],
   ["save-as", { type: "handler", name: "saveAs" }],
   ["load-fixture-20k", { type: "fixture", size: 20000 }],
   ["load-fixture-200k", { type: "fixture", size: 200000 }],
