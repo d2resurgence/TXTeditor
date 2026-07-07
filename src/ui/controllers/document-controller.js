@@ -131,6 +131,9 @@ export function createDocumentController({
   resizeOpenedDocumentToFit = async () => {},
   loadStringTablesForWorkspace = async () => {},
   saveJsonStringViewIfNeeded = async () => false,
+  syncExternalFileBaseline = async () => {},
+  forgetExternalFileWatch = () => {},
+  resolveExternalFileChangeAfterReload = () => {},
   storage = globalThis.localStorage,
   sessionStorage = globalThis.sessionStorage
 }) {
@@ -224,6 +227,7 @@ export function createDocumentController({
     state.active = plan.activeIndex;
     await activateDocument(doc, { focus: false });
     if (isTableDocument(doc)) await prepareOpenedTable(doc);
+    if (isTableDocument(doc) && !isAnimDataDocument(doc)) syncExternalFileBaseline(doc).catch(() => {});
     renderChrome();
     if (scrollProblems) scrollProblemsToActiveFile();
     if (focus) focusActiveEditor();
@@ -738,6 +742,7 @@ export function createDocumentController({
       if (await saveJsonStringViewIfNeeded(doc)) {
         grid.draw();
         renderChrome();
+        syncExternalFileBaseline(doc).catch(() => {});
         return true;
       }
       const saved = await saveDocumentNative(doc, false, { validateTarget: (path) => validateSaveTarget(doc, path) });
@@ -746,6 +751,7 @@ export function createDocumentController({
       if (isTableDocument(doc)) onTableDocumentSaved(doc, { saveAs: false, previousKey: previousAnnotationIdentity });
       grid.draw();
       renderChrome();
+      syncExternalFileBaseline(doc).catch(() => {});
       return true;
     }
     const snapshot = documentTextSnapshot(doc);
@@ -756,6 +762,7 @@ export function createDocumentController({
     await lspRebindSavedDoc(doc, previousUri);
     if (isTableDocument(doc)) onTableDocumentSaved(doc, { saveAs: false, previousKey: previousAnnotationIdentity });
     renderChrome();
+    syncExternalFileBaseline(doc).catch(() => {});
     return true;
   }
 
@@ -797,6 +804,7 @@ export function createDocumentController({
       if (isTableDocument(doc)) onTableDocumentSaved(doc, { saveAs: true, previousKey: previousAnnotationIdentity });
       grid.draw();
       renderChrome();
+      syncExternalFileBaseline(doc).catch(() => {});
       return true;
     }
     if ("showSaveFilePicker" in window) {
@@ -867,6 +875,7 @@ export function createDocumentController({
       ? lspCloseDoc(doc).catch((error) => reportLspCloseFailure(doc, error, "tab-close"))
       : null;
     if (!lspClosePromise && isTableDocument(doc)) cancelLegacyLintJobs({ clearDiagnostics: false });
+    forgetExternalFileWatch(doc);
     const documentCountBeforeClose = state.docs.length;
     if (isTableDocument(doc)) onTableDocumentClosed(doc);
     state.docs.splice(index, 1);
@@ -1144,11 +1153,18 @@ export function createDocumentController({
       updateGridDiagnostics();
       renderChrome();
       if (isActive) scrollProblemsToActiveFile();
+      syncExternalFileBaseline(freshDoc).catch(() => {});
+      resolveExternalFileChangeAfterReload(freshDoc);
       return true;
     } catch (error) {
       showError(error);
       return false;
     }
+  }
+
+  function reloadDocumentAtIndex(index, options) {
+    const doc = state.docs[index];
+    return doc ? reloadDocument(doc, options) : Promise.resolve(false);
   }
 
   async function reloadFile() {
@@ -1217,6 +1233,10 @@ export function createDocumentController({
     return text.startsWith("Large file mode:") || text.startsWith("Opening ");
   }
 
+  function isSavePending(doc) {
+    return pendingSaves.has(doc);
+  }
+
   return {
     activateDocumentTab,
     addDocument,
@@ -1227,6 +1247,7 @@ export function createDocumentController({
     handleExternalChangeDialogClick,
     handleWatchedFilesChanged,
     hasOpenDocument,
+    isSavePending,
     isTextLikeFile,
     isTextLikePath,
     loadFixture,
@@ -1241,6 +1262,7 @@ export function createDocumentController({
     restoreWorkspace,
     openJsonDocumentPath,
     reloadAll,
+    reloadDocumentAtIndex,
     reloadFile,
     saveAll,
     saveAs,

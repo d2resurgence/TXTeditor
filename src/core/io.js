@@ -10,6 +10,7 @@ export {
   openNativePathsBulk,
   openWorkspaceNative,
   readFileAsDocument,
+  readFileModifiedTimes,
   readRawTextFiles,
   readTextFilesNative,
   saveDocumentNative,
