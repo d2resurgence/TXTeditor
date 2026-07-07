@@ -695,6 +695,7 @@ test("context menu command item registries preserve expected command groups", ()
   assert.deepEqual(mathCommandItems().map((item) => item.id), ["math-add", "math-subtract", "math-multiply", "math-divide"]);
   const commandSurfaceController = readFileSync(new URL("../src/ui/controllers/command-surface-controller.js", import.meta.url), "utf8");
   assert.match(commandSurfaceController, /id: "go-to-definition"[\s\S]*insertRowMenuEntry\(\)/);
+  assert.match(commandSurfaceController, /deleteRowMenuItem\(\)[\s\S]*label: "Column Operations"/);
   assert.match(commandSurfaceController, /label: "Fill"[\s\S]*label: "Math"/);
   assert.doesNotMatch(commandSurfaceController, /go-to-definition", label: "Go To Definition", disabled:/);
 });

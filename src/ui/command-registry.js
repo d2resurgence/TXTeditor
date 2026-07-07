@@ -164,12 +164,16 @@ export function commandActionForId(id) {
   return action ? { ...action } : { type: "unknown", id };
 }
 
+export function deleteRowMenuItem() {
+  return { id: "delete-row", label: "Delete Row(s)" };
+}
+
 export function rowCommandItems({ cloneDisabled = false } = {}) {
   return [
     { id: "add-row", label: "Add Rows..." },
     { id: "insert-row", label: "Insert Rows..." },
     { id: "hide-row", label: "Hide Row(s)" },
-    { id: "delete-row", label: "Delete Row(s)" },
+    deleteRowMenuItem(),
     { id: "clone-row", label: "Clone Row", disabled: cloneDisabled }
   ];
 }
