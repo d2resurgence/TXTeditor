@@ -1,5 +1,4 @@
-use crate::config::{load_app_config_from, AppConfigState};
-use std::fs;
+use crate::config::{load_app_config_from, resolve_app_config_path, AppConfigState};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
@@ -10,12 +9,17 @@ pub(crate) fn close_window(window: tauri::WebviewWindow) -> Result<(), String> {
 }
 
 pub(crate) fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let config_dir = app
+    // Search for config.json in order:
+    //   1. beside the executable (portable installs)
+    //   2. current working directory
+    //   3. project root above the exe (dev: src-tauri/target/release/)
+    //   4. AppData (fallback when no local config exists)
+    let appdata_config = app
         .path()
         .app_config_dir()
-        .unwrap_or_else(|_| PathBuf::from("."));
-    let _ = fs::create_dir_all(&config_dir);
-    let config_path = config_dir.join("config.json");
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("config.json");
+    let config_path = resolve_app_config_path(appdata_config);
     let config = load_app_config_from(&config_path);
     app.manage(AppConfigState {
         config: Mutex::new(config),

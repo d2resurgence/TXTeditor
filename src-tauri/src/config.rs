@@ -47,6 +47,41 @@ pub(crate) fn load_app_config_from(path: &Path) -> AppConfig {
         .unwrap_or_default()
 }
 
+pub(crate) fn config_search_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("config.json"));
+        }
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join("config.json"));
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        let mut path = exe.as_path();
+        for _ in 0..4 {
+            path = match path.parent() {
+                Some(parent) => parent,
+                None => break,
+            };
+        }
+        candidates.push(path.join("config.json"));
+    }
+    candidates
+}
+
+pub(crate) fn resolve_app_config_path(appdata_config: PathBuf) -> PathBuf {
+    resolve_app_config_path_from(appdata_config, &config_search_candidates())
+}
+
+fn resolve_app_config_path_from(appdata_config: PathBuf, candidates: &[PathBuf]) -> PathBuf {
+    candidates
+        .iter()
+        .find(|path| path.exists())
+        .cloned()
+        .unwrap_or(appdata_config)
+}
+
 #[tauri::command]
 pub(crate) fn get_config(state: tauri::State<'_, AppConfigState>) -> AppConfig {
     state.config.lock().unwrap().clone()
@@ -146,6 +181,43 @@ mod tests {
         assert_eq!(config.lsp_preload_enabled, true);
         assert_eq!(config.lsp_preload_skip.as_deref(), Some(&["AiParms".to_string()][..]));
         assert_eq!(config.autofit_columns.as_ref().and_then(|v| v.get("*")).and_then(|v| v.as_bool()), Some(true));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_app_config_path_prefers_first_existing_candidate() {
+        let dir =
+            std::env::temp_dir().join(format!("txteditor-config-resolve-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let portable = dir.join("portable").join("config.json");
+        let cwd = dir.join("cwd-config.json");
+        let fallback = dir.join("fallback-config.json");
+        fs::create_dir_all(portable.parent().unwrap()).unwrap();
+        fs::write(&portable, r#"{"lintMode":"legacy"}"#).unwrap();
+        fs::write(&cwd, r#"{"lintMode":"basic"}"#).unwrap();
+
+        let resolved = resolve_app_config_path_from(
+            fallback.clone(),
+            &[portable.clone(), cwd.clone()],
+        );
+        assert_eq!(resolved, portable);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_app_config_path_uses_appdata_when_no_candidate_exists() {
+        let dir =
+            std::env::temp_dir().join(format!("txteditor-config-fallback-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let missing = dir.join("missing-config.json");
+        let fallback = dir.join("appdata-config.json");
+
+        let resolved = resolve_app_config_path_from(fallback.clone(), &[missing]);
+        assert_eq!(resolved, fallback);
 
         let _ = fs::remove_dir_all(&dir);
     }
