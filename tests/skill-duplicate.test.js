@@ -117,6 +117,36 @@ test("resolveMissileDuplicate names the root missile after the user's new name",
   assert.equal(child.newName, "roguearrow2");
 });
 
+test("resolveMissileDuplicate applies source missile stem prefix to related missiles", () => {
+  const missilesDoc = TableDocument.fromText(
+    "Missile\tId\tsubmissile1\tsubmissile2",
+    [
+      "Missile\tId\tsubmissile1\tsubmissile2",
+      "frozenorb\t100\tfrozenorbbolt\tfrozenorbnova",
+      "frozenorbbolt\t101\tfrozenorbexplode\t",
+      "frozenorbexplode\t102\t\t",
+      "frozenorbnova\t103\t\t"
+    ].join("\n")
+  );
+  const result = resolveMissileDuplicate(missilesDoc, "frozenorb", "phantomarrow1");
+  assert.ifError(result.error);
+  assert.equal(result.missiles.find((entry) => entry.originalName === "frozenorb").newName, "phantomarrow1");
+  assert.equal(result.missiles.find((entry) => entry.originalName === "frozenorbbolt").newName, "phantomarrow1bolt");
+  assert.equal(result.missiles.find((entry) => entry.originalName === "frozenorbexplode").newName, "phantomarrow1explode");
+  assert.equal(result.missiles.find((entry) => entry.originalName === "frozenorbnova").newName, "phantomarrow1nova");
+});
+
+test("deriveMissileNewName applies source missile stem prefix for unrelated root renames", () => {
+  const transform = detectNameTransform("frozenorb", "phantomarrow1");
+  assert.equal(
+    deriveMissileNewName("frozenorbexplode", transform, {
+      sourceMissileName: "frozenorb",
+      newMissileName: "phantomarrow1"
+    }),
+    "phantomarrow1explode"
+  );
+});
+
 test("resolveSkillDuplicate applies stem replacement when skill and missile share a name", () => {
   const skillsDoc = TableDocument.fromText(
     "skill\tId\tsrvmissile",

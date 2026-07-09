@@ -165,6 +165,14 @@ export function deriveMissileNewName(origName, transform, context = {}) {
     if (stemPrefixed != null) return stemPrefixed;
   }
 
+  const missileStem = sourceMissileName.trim().replace(/\s+/g, '').toLowerCase();
+  const newMissileStemText = newMissileName.trim().replace(/\s+/g, '');
+  if (sourceMissileName.trim()) {
+    if (missileStem && ol === missileStem) return formatStemReplacement(newMissileStemText);
+    const stemPrefixed = applySkillStemPrefixRename(orig, missileStem, newMissileStemText);
+    if (stemPrefixed != null) return stemPrefixed;
+  }
+
   switch (transform.kind) {
     case 'same':
       return orig;
