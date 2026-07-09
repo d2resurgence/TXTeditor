@@ -434,6 +434,32 @@ test("copy and paste support first-row header cells", () => {
   assert.equal(doc.getCell(0, 1), "renamed");
 });
 
+test("paste into full-row selection replaces from column 0", () => {
+  const doc = TableDocument.fromText("x.txt", "a\tb\tc\n1\t2\t3\n4\t5\t6");
+  const selection = new SelectionModel();
+  selection.setRow(1, doc.columnCount);
+  const copied = copyRange(doc, { top: 2, left: 0, bottom: 2, right: 2 });
+  assert.equal(selection.focus.column, doc.columnCount - 1);
+  const command = pasteTextToRangesCommand(doc, selection.ranges, selection.focus, copied);
+  command.redo(doc);
+  assert.equal(doc.getCell(1, 0), "4");
+  assert.equal(doc.getCell(1, 1), "5");
+  assert.equal(doc.getCell(1, 2), "6");
+});
+
+test("paste into extended selection uses the selection top-left", () => {
+  const doc = TableDocument.fromText("x.txt", "a\tb\tc\n1\t2\t3\n4\t5\t6");
+  const selection = new SelectionModel();
+  selection.set(1, 0);
+  selection.extend(2, 2);
+  const command = pasteTextToRangesCommand(doc, selection.ranges, selection.focus, "p\tq\tr\ns\tt\tu");
+  command.redo(doc);
+  assert.equal(doc.getCell(1, 0), "p");
+  assert.equal(doc.getCell(1, 2), "r");
+  assert.equal(doc.getCell(2, 0), "s");
+  assert.equal(doc.getCell(2, 2), "u");
+});
+
 test("fill copies the top-left selected value over the selection", () => {
   const doc = TableDocument.fromText("x.txt", "a\tb\tc\n1\t2\t3\n4\t5\t6");
   const command = fillSelectionCommand(doc, { top: 1, left: 0, bottom: 2, right: 2 });

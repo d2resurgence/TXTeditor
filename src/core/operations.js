@@ -61,7 +61,22 @@ export function pasteTextToRangesCommand(doc, ranges, focus, text) {
     const value = rows[0][0];
     return makeCellCommand("Paste Selection", doc, rangeCells(ranges).map(({ row, column }) => ({ row, column, value })));
   }
-  return pasteTextCommand(doc, focus, text);
+  return pasteTextCommand(doc, pasteOriginForRanges(ranges, focus), text);
+}
+
+function pasteOriginForRanges(ranges, focus) {
+  if (!ranges?.length) return focus;
+  const rect = unionRangeRect(ranges);
+  return { row: rect.top, column: rect.left };
+}
+
+function unionRangeRect(ranges) {
+  return ranges.reduce((acc, range) => ({
+    top: Math.min(acc.top, range.top),
+    left: Math.min(acc.left, range.left),
+    bottom: Math.max(acc.bottom, range.bottom),
+    right: Math.max(acc.right, range.right)
+  }), ranges[0]);
 }
 
 export function clearRangeCommand(doc, rect, label = "Clear Cell(s)") {
