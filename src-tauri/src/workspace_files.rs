@@ -294,11 +294,12 @@ fn user_facing_path(path: &Path) -> String {
     value.into_owned()
 }
 
+// Resurgence: classic .tbl string tables are binary, so they stay out of the workspace browser.
 fn is_text_like(path: &Path) -> bool {
     path.extension()
         .and_then(|value| value.to_str())
         .is_some_and(|extension| {
-            ["txt", "tsv", "tbl", "csv"]
+            ["txt", "tsv", "csv"]
                 .iter()
                 .any(|candidate| extension.eq_ignore_ascii_case(candidate))
         })
@@ -416,7 +417,8 @@ mod tests {
             unique
         ));
         fs::create_dir_all(root.join("nested")).unwrap();
-        fs::write(root.join("z.json"), "z").unwrap();
+        // Resurgence: binary .tbl string tables are not listed.
+        fs::write(root.join("z.tbl"), "z").unwrap();
         fs::write(root.join("a.txt"), "alpha").unwrap();
         fs::write(root.join("nested").join("m.tsv"), "middle").unwrap();
         fs::write(root.join("ignored.md"), "ignored").unwrap();
@@ -430,8 +432,7 @@ mod tests {
             names,
             vec![
                 "a.txt".to_string(),
-                "m.tsv".to_string(),
-                "z.json".to_string()
+                "m.tsv".to_string()
             ]
         );
         assert!(payload
@@ -449,7 +450,7 @@ mod tests {
                 .iter()
                 .map(|file| file.size)
                 .collect::<Vec<Option<u64>>>(),
-            vec![Some(5), Some(6), Some(1)]
+            vec![Some(5), Some(6)]
         );
 
         fs::remove_dir_all(&root).unwrap();
