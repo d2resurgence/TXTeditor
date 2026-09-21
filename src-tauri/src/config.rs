@@ -163,6 +163,12 @@ pub(crate) struct AppConfig {
     pub(crate) json_diagnostics: bool,
     #[serde(default, deserialize_with = "deserialize_json_diagnostic_rules")]
     pub(crate) json_diagnostic_rules: JsonDiagnosticRules,
+    // Resurgence: folder holding string.json / patchstring.json / expansionstring.json.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) strings_path: Option<String>,
+    // Resurgence: columns to auto-fit on open, keyed by file base name ("*" = every file).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) autofit_columns: Option<serde_json::Value>,
 }
 
 impl Default for AppConfig {
@@ -177,6 +183,8 @@ impl Default for AppConfig {
             debug_logging: false,
             json_diagnostics: false,
             json_diagnostic_rules: JsonDiagnosticRules::default(),
+            strings_path: None,
+            autofit_columns: None,
         }
     }
 }
@@ -290,6 +298,8 @@ mod tests {
                     id_start: 56_000.5,
                 },
             },
+            strings_path: None,
+            autofit_columns: None,
         };
         let json = serde_json::to_string(&config).unwrap();
 

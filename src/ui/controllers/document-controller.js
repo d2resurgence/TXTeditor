@@ -1,3 +1,4 @@
+import { configuredAutofitColumnIndexes } from "../../core/autofit-columns-policy.js";
 import { TableDocument } from "../../core/table-model.js";
 import { JsonDocument } from "../../core/json-document.js";
 import { LARGE_FILE_THRESHOLDS } from "../../core/large-file-policy.js";
@@ -229,6 +230,15 @@ export function createDocumentController({
     return doc;
   }
 
+  async function applyConfiguredAutofit(doc) {
+    const columns = configuredAutofitColumnIndexes(doc, state.config?.autofitColumns ?? {});
+    if (!columns.length || typeof grid.measureColumnFitWidth !== "function") return;
+    const wasDirty = doc.dirty;
+    const widths = await Promise.all(columns.map((column) => grid.measureColumnFitWidth(column, { yieldEvery: 0 })));
+    columns.forEach((column, index) => doc.setColumnWidth(column, widths[index]));
+    doc.dirty = wasDirty;
+  }
+
   async function prepareOpenedTable(doc) {
     if (doc.largeFileMode) {
       doc.initialColumnFitApplied = true;
@@ -241,6 +251,7 @@ export function createDocumentController({
       doc.initialColumnFitApplied = true;
     } else if (!doc.largeFileMode && !doc.initialColumnFitApplied) {
       grid.autoFitInitialColumns();
+      await applyConfiguredAutofit(doc);
       doc.initialColumnFitApplied = true;
       grid.layout();
     }
