@@ -33,6 +33,8 @@ export function createSkillDupController({
   let mode = "skill";
   // Missiles from EXCLUDE_DEFAULT the user chose to duplicate anyway, lowercased.
   let forcedMissiles = new Set();
+  // Missiles the user unticked in the preview, lowercased.
+  let removedMissiles = new Set();
 
   function findDocByName(name) {
     return state.docs.find((doc) => doc.name.toLowerCase() === name.toLowerCase()) ?? null;
@@ -63,6 +65,7 @@ export function createSkillDupController({
   function setMode(nextMode) {
     mode = nextMode;
     forcedMissiles = new Set();
+    removedMissiles = new Set();
     els.skillDupModeSkill.classList.toggle("active", nextMode === "skill");
     els.skillDupModeMissile.classList.toggle("active", nextMode === "missile");
     els.skillDupSourceLabel.textContent = nextMode === "skill" ? "Source skill" : "Source missile";
@@ -144,11 +147,6 @@ export function createSkillDupController({
     return rows.concat(missiles);
   }
 
-  function isOptionalMissile(entry) {
-    const name = entry.originalName.trim().toLowerCase();
-    return Boolean(entry.excluded) || forcedMissiles.has(name);
-  }
-
   function renderPreview(nextChangeset) {
     const rows = previewRows(nextChangeset);
 
@@ -157,8 +155,11 @@ export function createSkillDupController({
       const classes = [kind === "skill" ? "skill-row" : "", excluded ? "skill-dup-excluded-row" : ""].filter(Boolean);
       const rowClass = classes.length ? ` class="${classes.join(" ")}"` : "";
       const targetVal = entry.targetId != null ? String(entry.targetId) : "";
-      const include = isOptionalMissile(entry)
-        ? `<input type="checkbox" data-field="include"${excluded ? "" : " checked"} title="Duplicate this client-only missile" />`
+      // The root of a missile-mode duplicate is the thing being duplicated, so it cannot be dropped.
+      const isRoot = mode === "missile"
+        && entry.originalName.trim().toLowerCase() === els.skillDupSource.value.trim().toLowerCase();
+      const include = kind === "missile"
+        ? `<input type="checkbox" data-field="include"${excluded ? "" : " checked"}${isRoot ? " disabled" : ""} title="${isRoot ? "The source missile is always duplicated" : "Include this missile in the duplicate"}" />`
         : "";
       const disabled = excluded ? " disabled" : "";
       return `<tr${rowClass} data-kind="${kind}" data-index="${index}">
@@ -175,8 +176,13 @@ export function createSkillDupController({
       const include = row.querySelector('input[data-field="include"]');
       include?.addEventListener("change", () => {
         const name = entry.originalName.trim().toLowerCase();
-        if (include.checked) forcedMissiles.add(name);
-        else forcedMissiles.delete(name);
+        if (include.checked) {
+          removedMissiles.delete(name);
+          if (EXCLUDE_DEFAULT.has(name)) forcedMissiles.add(name);
+        } else {
+          forcedMissiles.delete(name);
+          if (!EXCLUDE_DEFAULT.has(name)) removedMissiles.add(name);
+        }
         resolve({ keepEdits: true }).catch((error) => showError(error instanceof Error ? error.message : String(error)));
       });
       for (const input of row.querySelectorAll('input[type="text"]')) {
@@ -330,7 +336,9 @@ export function createSkillDupController({
   }
 
   function activeExclusions() {
-    return new Set([...EXCLUDE_DEFAULT].filter((name) => !forcedMissiles.has(name)));
+    const exclusions = new Set([...EXCLUDE_DEFAULT, ...removedMissiles]);
+    for (const name of forcedMissiles) exclusions.delete(name);
+    return exclusions;
   }
 
   // Ticking a client-only missile re-resolves so its own sub-missiles come along;
