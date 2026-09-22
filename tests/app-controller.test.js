@@ -1533,7 +1533,7 @@ test("context menu uses one explicit active submenu and exposes row and column c
   assert.equal(contextMenuActiveGroupId(null), "");
   assert.equal(contextMenuGroupIsActive(activeGroup, activeGroup), true);
   assert.equal(contextMenuGroupIsActive(inactiveGroup, activeGroup), false);
-  assert.deepEqual(contextMenuHiddenState(), { contextMenuActiveGroup: "", contextMenuOpen: false });
+  assert.deepEqual(contextMenuHiddenState(), { contextMenuActiveGroup: "", contextMenuOpen: false, contextHit: null });
   assert.equal(rowCommandItems().some((item) => item.id === "clone-row" && item.label === "Clone Row"), true);
   assert.equal(columnCommandItems().some((item) => item.id === "clone-column" && item.label === "Clone Column(s)"), true);
   assert.equal(rowCommandItems().some((item) => item.label === "Swap Rows"), false);

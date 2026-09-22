@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { TableDocument } from "../src/core/table-model.js";
+import { isStringKeyCol } from "../src/core/string-goto-policy.js";
 import {
   PROC_SKILL_ID_LIMIT,
   allocateId,
@@ -259,4 +260,20 @@ test("rowForId maps a target id back to its row and reports unknown ids", () => 
   assert.equal(rowForId(doc, "3"), 4);
   assert.equal(rowForId(doc, 99), -1);
   assert.equal(rowForId(doc, null), -1);
+});
+
+test("string GoToDef covers the display-string columns audited against Resurgence data", () => {
+  for (const [column, file] of [
+    ["descstr2", "ItemStatCost.txt"], ["dgrpstrpos", "ItemStatCost.txt"], ["dgrpstrneg", "ItemStatCost.txt"],
+    ["DescStr", "MonStats.txt"], ["StrAllSkills", "CharStats.txt"], ["StrSkillTab2", "CharStats.txt"],
+    ["NameFirst", "Hireling.txt"], ["NameLast", "Hireling.txt"], ["Name", "SuperUniques.txt"],
+    ["name", "Sets.txt"], ["name", "PetType.txt"], ["Name", "Objects.txt"], ["Name", "Books.txt"],
+    ["Name", "UniquePrefix.txt"], ["NameStr", "MonStats.txt"]
+  ]) {
+    assert.equal(isStringKeyCol(column, file), true, `${file}:${column} should be a string key column`);
+  }
+  // Item codes resolve through vector-lsp instead, so they stay out of the string fallback.
+  for (const [column, file] of [["code", "Armor.txt"], ["Rune1", "Runes.txt"], ["item1", "CharStats.txt"]]) {
+    assert.equal(isStringKeyCol(column, file), false, `${file}:${column} should not be a string key column`);
+  }
 });

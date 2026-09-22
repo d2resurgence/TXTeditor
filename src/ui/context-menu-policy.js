@@ -7,7 +7,9 @@ export function contextMenuGroupIsActive(candidate, activeGroup) {
 }
 
 export function contextMenuHiddenState() {
-  return { contextMenuActiveGroup: "", contextMenuOpen: false };
+  // contextHit is dropped with the menu: commands started from the keyboard or the
+  // palette must act on the selection, not on the last cell that was right-clicked.
+  return { contextMenuActiveGroup: "", contextMenuOpen: false, contextHit: null };
 }
 
 export function contextMenuOpenTransition(open) {

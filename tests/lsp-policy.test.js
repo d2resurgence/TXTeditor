@@ -1775,7 +1775,7 @@ test("Legacy Lint and Vector-LSP activation stay independent of dock placement",
 });
 
 test("context menu suspends default and Vector-LSP hover until it closes", () => {
-  assert.deepEqual(contextMenuHiddenState(), { contextMenuActiveGroup: "", contextMenuOpen: false });
+  assert.deepEqual(contextMenuHiddenState(), { contextMenuActiveGroup: "", contextMenuOpen: false, contextHit: null });
   assert.deepEqual(contextMenuOpenTransition(true), {
     contextMenuOpen: true,
     hoverSuspended: true,
