@@ -2,13 +2,16 @@ import { TableDocument } from "../../core/table-model.js";
 import { readRawTextFiles } from "../../core/platform/file-io.js";
 import { makeCellCommand, makeCustomCommand } from "../../core/undo.js";
 import {
+  EXCLUDE_DEFAULT,
+  PROC_SKILL_ID_LIMIT,
   buildMissileRemap,
   buildMissileValues,
   buildSkillValues,
   duplicateNameUnchanged,
   findUnchangedDuplicateEntries,
   resolveMissileDuplicate,
-  resolveSkillDuplicate
+  resolveSkillDuplicate,
+  rowForId
 } from "../../core/skill-duplicate.js";
 
 export function createSkillDupController({
@@ -28,6 +31,8 @@ export function createSkillDupController({
 }) {
   let changeset = null;
   let mode = "skill";
+  // Missiles from EXCLUDE_DEFAULT the user chose to duplicate anyway, lowercased.
+  let forcedMissiles = new Set();
 
   function findDocByName(name) {
     return state.docs.find((doc) => doc.name.toLowerCase() === name.toLowerCase()) ?? null;
@@ -57,6 +62,7 @@ export function createSkillDupController({
 
   function setMode(nextMode) {
     mode = nextMode;
+    forcedMissiles = new Set();
     els.skillDupModeSkill.classList.toggle("active", nextMode === "skill");
     els.skillDupModeMissile.classList.toggle("active", nextMode === "missile");
     els.skillDupSourceLabel.textContent = nextMode === "skill" ? "Source skill" : "Source missile";
@@ -106,6 +112,7 @@ export function createSkillDupController({
   function refreshPreviewValidation() {
     if (!changeset) return;
     const unchanged = findUnchangedDuplicateEntries(changeset);
+    const previewed = previewRows(changeset);
     const unchangedMissiles = new Set(
       unchanged.filter((item) => item.kind === "missile").map((item) => item.entry)
     );
@@ -113,49 +120,69 @@ export function createSkillDupController({
 
     for (const row of els.skillDupBody.querySelectorAll("tr")) {
       const kind = row.dataset.kind;
-      const index = Number(row.dataset.index);
-      const entry = kind === "skill"
-        ? changeset.skill
-        : changeset.missiles[changeset.skill ? index - 1 : index];
+      const entry = previewed[Number(row.dataset.index)]?.entry;
       const newNameInput = row.querySelector('input[data-field="newName"]');
-      if (!newNameInput) continue;
-      const needsEdit = kind === "skill"
-        ? skillUnchanged && duplicateNameUnchanged(entry.originalName, entry.newName)
-        : unchangedMissiles.has(entry);
+      if (!entry || !newNameInput) continue;
+      const needsEdit = entry.excluded
+        ? false
+        : kind === "skill"
+          ? skillUnchanged && duplicateNameUnchanged(entry.originalName, entry.newName)
+          : unchangedMissiles.has(entry);
       newNameInput.classList.toggle("skill-dup-name-unchanged", needsEdit);
     }
 
     els.skillDupApply.disabled = unchanged.length > 0;
   }
 
-  function renderPreview(nextChangeset) {
+  function previewRows(nextChangeset) {
     const rows = [];
     if (nextChangeset.skill) rows.push({ kind: "skill", entry: nextChangeset.skill });
-    for (const missile of nextChangeset.missiles) rows.push({ kind: "missile", entry: missile });
+    const missiles = [
+      ...nextChangeset.missiles.map((entry) => ({ kind: "missile", entry })),
+      ...(nextChangeset.excludedMissiles ?? []).map((entry) => ({ kind: "missile", entry }))
+    ].sort((a, b) => a.entry.sourceRow - b.entry.sourceRow);
+    return rows.concat(missiles);
+  }
+
+  function isOptionalMissile(entry) {
+    const name = entry.originalName.trim().toLowerCase();
+    return Boolean(entry.excluded) || forcedMissiles.has(name);
+  }
+
+  function renderPreview(nextChangeset) {
+    const rows = previewRows(nextChangeset);
 
     els.skillDupBody.innerHTML = rows.map(({ kind, entry }, index) => {
-      const rowClass = kind === "skill" ? ' class="skill-row"' : "";
-      const targetVal = entry.targetRow >= 0 ? String(entry.targetRow) : "";
-      const origCol = kind === "skill" ? "" : escapeHtml(entry.originalName);
+      const excluded = Boolean(entry.excluded);
+      const classes = [kind === "skill" ? "skill-row" : "", excluded ? "skill-dup-excluded-row" : ""].filter(Boolean);
+      const rowClass = classes.length ? ` class="${classes.join(" ")}"` : "";
+      const targetVal = entry.targetId != null ? String(entry.targetId) : "";
+      const include = isOptionalMissile(entry)
+        ? `<input type="checkbox" data-field="include"${excluded ? "" : " checked"} title="Duplicate this client-only missile" />`
+        : "";
+      const disabled = excluded ? " disabled" : "";
       return `<tr${rowClass} data-kind="${kind}" data-index="${index}">
+        <td class="skill-dup-include">${include}</td>
         <td>${kind}</td>
-        <td>${origCol}</td>
-        <td><input type="text" value="${escapeHtml(entry.newName)}" data-field="newName" /></td>
-        <td class="row-num"><input type="text" value="${escapeHtml(targetVal)}" placeholder="append" data-field="targetRow" /></td>
+        <td>${escapeHtml(entry.originalName)}</td>
+        <td><input type="text" value="${escapeHtml(entry.newName)}" data-field="newName"${disabled} /></td>
+        <td class="row-num"><input type="text" value="${escapeHtml(targetVal)}" placeholder="append" data-field="targetId"${disabled} /></td>
       </tr>`;
     }).join("");
 
     for (const row of els.skillDupBody.querySelectorAll("tr")) {
-      const kind = row.dataset.kind;
-      const index = Number(row.dataset.index);
-      const entry = kind === "skill" ? nextChangeset.skill : nextChangeset.missiles[nextChangeset.skill ? index - 1 : index];
-      for (const input of row.querySelectorAll("input")) {
+      const entry = rows[Number(row.dataset.index)].entry;
+      const include = row.querySelector('input[data-field="include"]');
+      include?.addEventListener("change", () => {
+        const name = entry.originalName.trim().toLowerCase();
+        if (include.checked) forcedMissiles.add(name);
+        else forcedMissiles.delete(name);
+        resolve({ keepEdits: true }).catch((error) => showError(error instanceof Error ? error.message : String(error)));
+      });
+      for (const input of row.querySelectorAll('input[type="text"]')) {
         input.addEventListener("input", () => {
           if (input.dataset.field === "newName") entry.newName = input.value;
-          else {
-            const value = Number.parseInt(input.value, 10);
-            entry.targetRow = Number.isNaN(value) ? -1 : value;
-          }
+          else entry.targetId = input.value.trim() === "" ? null : input.value.trim();
           refreshPreviewValidation();
         });
       }
@@ -165,17 +192,9 @@ export function createSkillDupController({
     refreshPreviewValidation();
   }
 
-  function readTargetId(doc, targetRow) {
-    for (let column = 0; column < doc.columnCount; column++) {
-      if (doc.getCell(0, column).toLowerCase() === "id") {
-        if (targetRow >= 1 && targetRow < doc.rowCount) {
-          const value = doc.getCell(targetRow, column).trim();
-          return value || null;
-        }
-        return null;
-      }
-    }
-    return null;
+  // An entry's target is an Id: an existing one overwrites that row, a new one appends.
+  function targetRowFor(doc, entry) {
+    return rowForId(doc, entry?.targetId ?? null);
   }
 
   function columnIndexForName(doc, columnName) {
@@ -200,7 +219,8 @@ export function createSkillDupController({
   function resolveMissileFocusRow(doc, entries, appliedRows, sourceNameLower) {
     const maxRow = Math.max(1, doc.rowCount - 1);
     const rowFromEntry = (entry, applied) => {
-      if (entry.targetRow >= 1 && entry.targetRow <= maxRow) return entry.targetRow;
+      const targetRow = targetRowFor(doc, entry);
+      if (targetRow >= 1 && targetRow <= maxRow) return targetRow;
       if (applied != null && applied >= 1 && applied <= maxRow) return Number(applied);
       return null;
     };
@@ -220,7 +240,8 @@ export function createSkillDupController({
   function missileRowsToFocus(doc, entries, appliedRows) {
     const maxRow = Math.max(1, doc.rowCount - 1);
     return [...new Set(entries.map((entry, index) => {
-      if (entry.targetRow >= 1 && entry.targetRow <= maxRow) return entry.targetRow;
+      const targetRow = targetRowFor(doc, entry);
+      if (targetRow >= 1 && targetRow <= maxRow) return targetRow;
       const applied = appliedRows[index];
       return applied != null ? Number(applied) : null;
     }).filter((row) => row != null && Number.isFinite(row) && row >= 1 && row <= maxRow))].sort((a, b) => a - b);
@@ -228,7 +249,8 @@ export function createSkillDupController({
 
   function resolveAppliedRow(doc, entry, applied) {
     const maxRow = Math.max(1, doc.rowCount - 1);
-    if (entry?.targetRow >= 1 && entry.targetRow <= maxRow) return entry.targetRow;
+    const targetRow = targetRowFor(doc, entry);
+    if (targetRow >= 1 && targetRow <= maxRow) return targetRow;
     const row = Number(applied);
     return Number.isFinite(row) && row >= 1 && row <= maxRow ? row : -1;
   }
@@ -307,9 +329,37 @@ export function createSkillDupController({
     return at;
   }
 
-  async function resolve() {
+  function activeExclusions() {
+    return new Set([...EXCLUDE_DEFAULT].filter((name) => !forcedMissiles.has(name)));
+  }
+
+  // Ticking a client-only missile re-resolves so its own sub-missiles come along;
+  // the names and ids already edited in the panel are carried over.
+  function captureEdits() {
+    if (!changeset) return null;
+    const edits = new Map();
+    for (const { entry } of previewRows(changeset)) {
+      edits.set(entry.originalName.trim().toLowerCase(), { newName: entry.newName, targetId: entry.targetId });
+    }
+    return edits;
+  }
+
+  function restoreEdits(nextChangeset, edits) {
+    if (!edits) return nextChangeset;
+    for (const { entry } of previewRows(nextChangeset)) {
+      const previous = edits.get(entry.originalName.trim().toLowerCase());
+      if (!previous) continue;
+      entry.newName = previous.newName;
+      if (!entry.excluded && previous.targetId != null) entry.targetId = previous.targetId;
+    }
+    return nextChangeset;
+  }
+
+  async function resolve({ keepEdits = false } = {}) {
     const sourceName = els.skillDupSource.value.trim();
     const newName = els.skillDupNewName.value.trim();
+    const edits = keepEdits ? captureEdits() : null;
+    const isProc = Boolean(els.skillDupProc?.checked);
     clearError();
     els.skillDupPreview.classList.add("hidden");
 
@@ -330,13 +380,13 @@ export function createSkillDupController({
           showError("Missiles.txt is not open and could not be found in the workspace.");
           return;
         }
-        const result = resolveMissileDuplicate(missilesDoc, sourceName, newName);
+        const result = resolveMissileDuplicate(missilesDoc, sourceName, newName, activeExclusions());
         if (result.error) {
           showError(result.error);
           return;
         }
-        changeset = result;
-        renderPreview(result);
+        changeset = restoreEdits(result, edits);
+        renderPreview(changeset);
         return;
       }
 
@@ -350,13 +400,17 @@ export function createSkillDupController({
         showError("Missiles.txt is not open and could not be found in the workspace.");
         return;
       }
-      const result = resolveSkillDuplicate(skillsDoc, missilesDoc, sourceName, newName);
+      const result = resolveSkillDuplicate(skillsDoc, missilesDoc, sourceName, newName, activeExclusions(), { isProc });
       if (result.error) {
         showError(result.error);
         return;
       }
-      changeset = result;
-      renderPreview(result);
+      if (isProc && result.skill.targetId == null) {
+        showError(`No free skill Id below ${PROC_SKILL_ID_LIMIT + 1} is available for a proc skill.`);
+        return;
+      }
+      changeset = restoreEdits(result, edits);
+      renderPreview(changeset);
       activateDocument(skillsDoc);
       els.skillDupNewName.focus();
     } catch (error) {
@@ -403,9 +457,9 @@ export function createSkillDupController({
     for (const entry of changeset.missiles) {
       const origSkill = isMissileMode ? null : changeset.skill.originalName;
       const newSkill = isMissileMode ? null : changeset.skill.newName;
-      const overrideId = readTargetId(missilesDoc, entry.targetRow) ?? String(missilesDoc.rowCount - 1);
+      const overrideId = entry.targetId != null ? String(entry.targetId) : null;
       const values = buildMissileValues(missilesDoc, entry, remap, origSkill, newSkill, overrideId);
-      appliedMissileRows.push(applyRowWrite(missilesDoc, entry.targetRow, values, `${label} - Missile`, writeOptions));
+      appliedMissileRows.push(applyRowWrite(missilesDoc, targetRowFor(missilesDoc, entry), values, `${label} - Missile`, writeOptions));
     }
 
     let appliedSkillRow = -1;
@@ -415,9 +469,9 @@ export function createSkillDupController({
         showError("Skills.txt is no longer open.");
         return;
       }
-      const overrideId = readTargetId(skillsDoc, changeset.skill.targetRow);
+      const overrideId = changeset.skill.targetId != null ? String(changeset.skill.targetId) : null;
       const skillValues = buildSkillValues(skillsDoc, changeset.skill, remap, overrideId);
-      appliedSkillRow = applyRowWrite(skillsDoc, changeset.skill.targetRow, skillValues, label, writeOptions);
+      appliedSkillRow = applyRowWrite(skillsDoc, targetRowFor(skillsDoc, changeset.skill), skillValues, label, writeOptions);
     }
 
     const origName = isMissileMode ? changeset.missiles.at(-1)?.originalName : changeset.skill.originalName;
@@ -491,6 +545,9 @@ export function createSkillDupController({
     els.skillDupModeSkill.addEventListener("click", () => setMode("skill"));
     els.skillDupModeMissile.addEventListener("click", () => setMode("missile"));
     els.skillDupApply.addEventListener("click", apply);
+    els.skillDupProc?.addEventListener("change", () => {
+      if (changeset) resolve({ keepEdits: true }).catch((error) => showError(error instanceof Error ? error.message : String(error)));
+    });
     els.skillDupSource.addEventListener("keydown", (event) => {
       if (event.key === "Enter") resolve().catch((error) => showError(error instanceof Error ? error.message : String(error)));
     });

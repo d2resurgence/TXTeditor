@@ -1987,8 +1987,31 @@ details:not([open]) .problem-file-header::before {
   white-space: nowrap;
 }
 .skill-dup-table td { padding: 3px 4px; border-bottom: 1px solid var(--gridLine); }
-.skill-dup-table td:first-child { padding-left: 8px; opacity: 0.6; white-space: nowrap; }
-.skill-dup-table td:nth-child(2) { opacity: 0.75; }
+.skill-dup-table td:first-child { padding-left: 8px; width: 22px; }
+.skill-dup-table td:nth-child(2) { opacity: 0.6; white-space: nowrap; }
+.skill-dup-table td:nth-child(3) { opacity: 0.75; }
+.skill-dup-table td.skill-dup-include { text-align: center; }
+.skill-dup-table td.skill-dup-include input { width: auto; }
+
+/* Client-only missiles from the exclusion list: shown, but not duplicated unless ticked. */
+.skill-dup-table tr.skill-dup-excluded-row td { opacity: 0.55; }
+.skill-dup-table tr.skill-dup-excluded-row td:nth-child(3) { color: #f87171; opacity: 0.8; }
+.skill-dup-table tr.skill-dup-excluded-row input[type="text"] {
+  color: var(--muted);
+  font-style: italic;
+}
+.skill-dup-table tr.skill-dup-excluded-row td.skill-dup-include { opacity: 1; }
+
+.skill-dup-proc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.skill-dup-proc input { cursor: pointer; }
 .skill-dup-table input {
   width: 100%;
   box-sizing: border-box;

@@ -40,12 +40,16 @@ function getRowValues(doc, rowNum) {
 
 function collectMissileTree(rootNames, missileByName, missilesDoc, subColIdxs, exclude) {
   const visited = new Set();
+  const skipped = new Set();
   const queue = rootNames.map(n => n.toLowerCase()).filter(Boolean);
   while (queue.length) {
     const name = queue.shift();
-    if (visited.has(name) || exclude.has(name)) continue;
+    if (visited.has(name)) continue;
     const row = missileByName.get(name);
     if (row == null) continue;
+    // Excluded missiles are reported so the panel can offer to force-duplicate them,
+    // but their own sub-missiles are not pulled in unless the user includes them.
+    if (exclude.has(name)) { skipped.add(name); continue; }
     visited.add(name);
     for (const idx of subColIdxs) {
       if (idx < 0) continue;
@@ -53,51 +57,66 @@ function collectMissileTree(rootNames, missileByName, missilesDoc, subColIdxs, e
       if (sub && !visited.has(sub)) queue.push(sub);
     }
   }
-  return visited;
+  return { included: visited, excluded: skipped };
 }
 
-function topoSort(missileSet, missileByName, missilesDoc, subColIdxs) {
-  const visited = new Set();
-  const ordered = [];
-  function visit(name) {
-    if (visited.has(name)) return;
-    visited.add(name);
-    const row = missileByName.get(name);
-    if (row != null) {
-      for (const idx of subColIdxs) {
-        if (idx < 0) continue;
-        const sub = missilesDoc.getCell(row, idx).trim().toLowerCase();
-        if (sub && missileSet.has(sub)) visit(sub);
-      }
-    }
-    ordered.push(name);
-  }
-  for (const name of [...missileSet].sort()) visit(name);
-  return ordered;
+// Duplicated rows keep the order they appear in the source file; references are
+// remapped by name, so write order does not matter.
+function bySourceRow(entries) {
+  return [...entries].sort((a, b) => a.sourceRow - b.sourceRow);
 }
 
-function nextFreeId(doc, idColIdx, start = 1024) {
-  if (idColIdx < 0) return start;
+function assignIds(entries, nextId) {
+  for (const entry of entries) entry.targetId = nextId();
+  return entries;
+}
+
+// Item procs store a skill id in 10 bits, so a skill used by a proc must stay below 1023.
+export const PROC_SKILL_ID_LIMIT = 1022;
+
+export function collectUsedIds(doc, idColIdx) {
   const used = new Set();
+  if (idColIdx < 0) return used;
   for (let r = 1; r < doc.rowCount; r++) {
-    const v = parseInt(doc.getCell(r, idColIdx), 10);
-    if (!isNaN(v)) used.add(v);
+    const value = parseInt(doc.getCell(r, idColIdx), 10);
+    if (!Number.isNaN(value)) used.add(value);
   }
-  let n = start;
-  while (used.has(n)) n++;
-  return n;
+  return used;
 }
 
-function makeUnusedSuggester(doc, nameColIdx) {
+export function rowForId(doc, id) {
+  const idColIdx = makeColIndex(doc).get('id') ?? -1;
+  if (idColIdx < 0 || id == null || id === '') return -1;
+  const wanted = parseInt(id, 10);
+  if (Number.isNaN(wanted)) return -1;
+  for (let r = 1; r < doc.rowCount; r++) {
+    if (parseInt(doc.getCell(r, idColIdx), 10) === wanted) return r;
+  }
+  return -1;
+}
+
+/**
+ * Pick the id a duplicated row should take.
+ * Default is "append": one past the highest id in the file. A proc skill must stay
+ * within the 10-bit proc range, so it falls back to the lowest free id below the limit.
+ */
+export function allocateId(used, { isProc = false, claimed = null } = {}) {
+  const taken = new Set(used);
+  for (const id of claimed ?? []) taken.add(id);
+  let next = 0;
+  for (const id of taken) if (id >= next) next = id + 1;
+  if (!isProc || next <= PROC_SKILL_ID_LIMIT) return next;
+  for (let id = 0; id <= PROC_SKILL_ID_LIMIT; id++) if (!taken.has(id)) return id;
+  return null;
+}
+
+function makeIdSuggester(doc, idColIdx, { isProc = false } = {}) {
+  const used = collectUsedIds(doc, idColIdx);
   const claimed = new Set();
   return function next() {
-    for (let r = 1; r < doc.rowCount; r++) {
-      if (!claimed.has(r) && doc.getCell(r, nameColIdx).trim().toLowerCase().startsWith('unused')) {
-        claimed.add(r);
-        return r;
-      }
-    }
-    return -1;
+    const id = allocateId(used, { isProc, claimed });
+    if (id != null) claimed.add(id);
+    return id;
   };
 }
 
@@ -124,15 +143,27 @@ export function detectNameTransform(oldName, newName) {
 /**
  * Derive a duplicated missile name from the source name and the user's rename.
  */
-function applySkillStemPrefixRename(orig, skillStem, newSkillStemText) {
+function applySkillStemPrefixRename(orig, skillStem, newSkillStemText, newSpacedText = '') {
   if (!skillStem) return null;
   const trimmed = orig.trim();
-  const ol = trimmed.toLowerCase();
-  if (!ol.startsWith(skillStem)) return null;
+  // Consume as many characters of the missile name as the (space-stripped) skill stem
+  // covers, so "blade shield attachment" matches the stem "bladeshield" too.
+  let consumed = 0;
+  let matched = 0;
+  let sawSpace = false;
+  while (consumed < trimmed.length && matched < skillStem.length) {
+    const ch = trimmed[consumed];
+    if (/\s/.test(ch)) { sawSpace = true; consumed++; continue; }
+    if (ch.toLowerCase() !== skillStem[matched]) return null;
+    consumed++;
+    matched++;
+  }
+  if (matched < skillStem.length) return null;
+  const replacementText = sawSpace && newSpacedText ? newSpacedText : newSkillStemText;
   const replacement = trimmed === trimmed.toLowerCase()
-    ? newSkillStemText.toLowerCase()
-    : newSkillStemText;
-  return replacement + trimmed.slice(skillStem.length);
+    ? replacementText.toLowerCase()
+    : replacementText;
+  return replacement + trimmed.slice(consumed);
 }
 
 export function deriveMissileNewName(origName, transform, context = {}) {
@@ -161,7 +192,7 @@ export function deriveMissileNewName(origName, transform, context = {}) {
     return formatStemReplacement(newSkillStemText);
   }
   if (oldSkillName.trim()) {
-    const stemPrefixed = applySkillStemPrefixRename(orig, skillStem, newSkillStemText);
+    const stemPrefixed = applySkillStemPrefixRename(orig, skillStem, newSkillStemText, newSkillName.trim());
     if (stemPrefixed != null) return stemPrefixed;
   }
 
@@ -169,7 +200,7 @@ export function deriveMissileNewName(origName, transform, context = {}) {
   const newMissileStemText = newMissileName.trim().replace(/\s+/g, '');
   if (sourceMissileName.trim()) {
     if (missileStem && ol === missileStem) return formatStemReplacement(newMissileStemText);
-    const stemPrefixed = applySkillStemPrefixRename(orig, missileStem, newMissileStemText);
+    const stemPrefixed = applySkillStemPrefixRename(orig, missileStem, newMissileStemText, newMissileName.trim());
     if (stemPrefixed != null) return stemPrefixed;
   }
 
@@ -181,15 +212,26 @@ export function deriveMissileNewName(origName, transform, context = {}) {
       return orig + transform.affix;
     }
     case 'prefix':
-      return orig;
+      return prefixWithNewRoot(orig, transform.affix);
     case 'stem-suffix':
       if (ol.startsWith(transform.stemOld)) {
         return transform.stemNew + orig.slice(transform.stemOld.length);
       }
       return orig + transform.stemAffix;
     default:
-      return orig;
+      // fallback-space: no shared stem to rewrite, so prefix with the new root name,
+      // matching how the original is written (compact or spaced).
+      return prefixWithNewRoot(orig, transform.affix);
   }
+}
+
+function prefixWithNewRoot(orig, affix) {
+  const root = (affix ?? '').trim();
+  if (!root) return orig;
+  if (!/\s/.test(orig) && orig === orig.toLowerCase()) {
+    return root.replace(/\s+/g, '').toLowerCase() + orig;
+  }
+  return `${root} ${orig}`;
 }
 
 export function duplicateNameUnchanged(originalName, newName) {
@@ -221,7 +263,7 @@ export function findUnchangedDuplicateEntries(changeset) {
  *   missiles: [{ sourceRow, originalName, newName, targetRow }, ...]  // topo order, leaves first
  * }
  */
-export function resolveSkillDuplicate(skillsDoc, missilesDoc, skillName, newSkillName, excludeMissiles = null) {
+export function resolveSkillDuplicate(skillsDoc, missilesDoc, skillName, newSkillName, excludeMissiles = null, { isProc = false } = {}) {
   const exclude = excludeMissiles ?? EXCLUDE_DEFAULT;
 
   const sCols = makeColIndex(skillsDoc);
@@ -251,27 +293,32 @@ export function resolveSkillDuplicate(skillsDoc, missilesDoc, skillName, newSkil
     .map(idx => idx >= 0 ? skillsDoc.getCell(sourceRow, idx).trim() : '')
     .filter(Boolean);
 
-  const missileSet = collectMissileTree(rootMissiles, missileByName, missilesDoc, subColIdxs, exclude);
-  const sorted = topoSort(missileSet, missileByName, missilesDoc, subColIdxs);
+  const { included, excluded: skippedMissiles } = collectMissileTree(rootMissiles, missileByName, missilesDoc, subColIdxs, exclude);
+  const missileIdColIdx = mCols.get('id') ?? -1;
+  const nextMissileId = makeIdSuggester(missilesDoc, missileIdColIdx);
+  const nextSkillId = makeIdSuggester(skillsDoc, skillIdColIdx, { isProc });
 
-  const nextMissileSlot = makeUnusedSuggester(missilesDoc, missileNameColIdx);
-  const nextSkillSlot   = makeUnusedSuggester(skillsDoc, skillNameColIdx);
-
-  const missiles = sorted.map(ml => {
+  const buildEntry = (ml, isExcluded) => {
     const srcRow = missileByName.get(ml);
     const origName = srcRow != null ? missilesDoc.getCell(srcRow, missileNameColIdx).trim() : ml;
     return {
       sourceRow: srcRow ?? -1,
       originalName: origName,
       newName: deriveMissileNewName(origName, transform, { oldSkillName: sl, newSkillName: nl }),
-      targetRow: nextMissileSlot()
+      targetId: null,
+      excluded: isExcluded
     };
-  });
+  };
+
+  const missiles = assignIds(bySourceRow([...included].map(ml => buildEntry(ml, false))), nextMissileId);
+  const excludedMissiles = bySourceRow([...skippedMissiles].map(ml => buildEntry(ml, true)));
 
   return {
     transform,
-    skill: { sourceRow, originalName: sl, newName: nl, newId: nextFreeId(skillsDoc, skillIdColIdx), targetRow: nextSkillSlot() },
+    isProc,
+    skill: { sourceRow, originalName: sl, newName: nl, targetId: nextSkillId() },
     missiles,
+    excludedMissiles,
   };
 }
 
@@ -296,11 +343,10 @@ export function resolveMissileDuplicate(missilesDoc, missileName, newMissileName
 
   const transform = detectNameTransform(sl, nl);
   const subColIdxs = MISSILE_SUB_COLS.map(c => mCols.get(c) ?? -1);
-  const missileSet = collectMissileTree([sl], missileByName, missilesDoc, subColIdxs, exclude);
-  const sorted = topoSort(missileSet, missileByName, missilesDoc, subColIdxs);
-  const nextSlot = makeUnusedSuggester(missilesDoc, missileNameColIdx);
+  const { included, excluded: skippedMissiles } = collectMissileTree([sl], missileByName, missilesDoc, subColIdxs, exclude);
+  const nextId = makeIdSuggester(missilesDoc, mCols.get('id') ?? -1);
 
-  const missiles = sorted.map(ml => {
+  const buildEntry = (ml, isExcluded) => {
     const srcRow = missileByName.get(ml);
     const origName = srcRow != null ? missilesDoc.getCell(srcRow, missileNameColIdx).trim() : ml;
     return {
@@ -311,11 +357,15 @@ export function resolveMissileDuplicate(missilesDoc, missileName, newMissileName
         newMissileName: nl,
         isSourceMissile: ml === sl.toLowerCase()
       }),
-      targetRow: nextSlot()
+      targetId: null,
+      excluded: isExcluded
     };
-  });
+  };
 
-  return { transform, missiles };
+  const missiles = assignIds(bySourceRow([...included].map(ml => buildEntry(ml, false))), nextId);
+  const excludedMissiles = bySourceRow([...skippedMissiles].map(ml => buildEntry(ml, true)));
+
+  return { transform, missiles, excludedMissiles };
 }
 
 /**

@@ -192,12 +192,15 @@
             <label for="skillDupNewName">New name</label>
             <input id="skillDupNewName" type="text" autocomplete="off" spellcheck="false" />
           </div>
+          <label id="skillDupProcLabel" class="skill-dup-proc" for="skillDupProc" title="Proc skills are stored in 10 bits, so they need an Id below 1023">
+            <input id="skillDupProc" type="checkbox" /> Proc skill
+          </label>
           <button id="skillDupResolve" type="button">Resolve</button>
         </div>
         <div id="skillDupError" class="skill-dup-error hidden"></div>
         <div id="skillDupPreview" class="hidden">
           <table class="skill-dup-table">
-            <thead><tr><th>Type</th><th>Original</th><th>New Name</th><th>Target Row</th></tr></thead>
+            <thead><tr><th title="Duplicate client-only missiles too"></th><th>Type</th><th>Original</th><th>New Name</th><th>Target Id</th></tr></thead>
             <tbody id="skillDupBody"></tbody>
           </table>
           <div class="skill-dup-footer">

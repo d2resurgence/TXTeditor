@@ -2,13 +2,35 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { TableDocument } from "../src/core/table-model.js";
 import {
+  PROC_SKILL_ID_LIMIT,
+  allocateId,
   deriveMissileNewName,
   detectNameTransform,
   duplicateNameUnchanged,
   findUnchangedDuplicateEntries,
   resolveMissileDuplicate,
-  resolveSkillDuplicate
+  resolveSkillDuplicate,
+  rowForId
 } from "../src/core/skill-duplicate.js";
+
+function skillsDoc() {
+  return TableDocument.fromText("Skills.txt", [
+    "skill\tId\tsrvmissile\tcltmissile",
+    "Fire Bolt\t0\tfirebolt\t",
+    "Blade Shield\t1\tblade shield attachment\t",
+    "Mon Thing\t7\t\t"
+  ].join("\n"));
+}
+
+function missilesDoc() {
+  return TableDocument.fromText("Missiles.txt", [
+    "Missile\tId\tExplosionMissile\tCltSubMissile1",
+    "firebolt\t0\tfireexplode\t",
+    "blade shield attachment\t1\t\tblade shield missile",
+    "blade shield missile\t2\t\t",
+    "fireexplode\t3\t\t"
+  ].join("\n"));
+}
 
 test("detectNameTransform recognizes suffix renames", () => {
   assert.deepEqual(detectNameTransform("Tornado", "Tornado2"), { kind: "suffix", affix: "2" });
@@ -82,11 +104,33 @@ test("deriveMissileNewName uses the new root name for the source missile", () =>
   );
 });
 
-test("deriveMissileNewName keeps the original name when rename logic cannot infer a distinct name", () => {
+test("deriveMissileNewName still renames missiles that share no stem with the skill", () => {
   const transform = detectNameTransform("Tornado", "MyCustomTornado");
   assert.equal(
     deriveMissileNewName("unrelatedbolt", transform, { oldSkillName: "Tornado", newSkillName: "MyCustomTornado" }),
-    "unrelatedbolt"
+    "mycustomunrelatedbolt"
+  );
+  // No shared stem at all: prefix with the new root so Apply is never blocked.
+  const unrelated = detectNameTransform("Blade Shield", "Molten Armor");
+  assert.equal(
+    deriveMissileNewName("poisonpuff", unrelated, { oldSkillName: "Blade Shield", newSkillName: "Molten Armor" }),
+    "moltenarmorpoisonpuff"
+  );
+  assert.equal(
+    deriveMissileNewName("Poison Puff", unrelated, { oldSkillName: "Blade Shield", newSkillName: "Molten Armor" }),
+    "Molten Armor Poison Puff"
+  );
+});
+
+test("deriveMissileNewName rewrites skill stems that keep their spaces", () => {
+  const transform = detectNameTransform("Blade Shield", "Molten Armor");
+  assert.equal(
+    deriveMissileNewName("blade shield attachment", transform, { oldSkillName: "Blade Shield", newSkillName: "Molten Armor" }),
+    "molten armor attachment"
+  );
+  assert.equal(
+    deriveMissileNewName("bladeshieldmissile", transform, { oldSkillName: "Blade Shield", newSkillName: "Molten Armor" }),
+    "moltenarmormissile"
   );
 });
 
@@ -160,4 +204,59 @@ test("resolveSkillDuplicate applies stem replacement when skill and missile shar
   assert.ifError(result.error);
   const rogueMissile = result.missiles.find((entry) => entry.originalName === "RogueMissile");
   assert.equal(rogueMissile.newName, "RogueMissile2");
+});
+
+test("allocateId appends past the highest id and keeps proc skills in range", () => {
+  assert.equal(allocateId([0, 1, 2]), 3);
+  assert.equal(allocateId([], { claimed: [5] }), 6);
+  // A proc skill cannot use an id above the 10-bit limit, so it fills a gap below it.
+  const full = Array.from({ length: PROC_SKILL_ID_LIMIT + 2 }, (_, index) => index).filter((id) => id !== 44);
+  assert.equal(allocateId(full), PROC_SKILL_ID_LIMIT + 2);
+  assert.equal(allocateId(full, { isProc: true }), 44);
+  assert.equal(allocateId(Array.from({ length: PROC_SKILL_ID_LIMIT + 2 }, (_, index) => index), { isProc: true }), null);
+});
+
+test("resolveSkillDuplicate appends ids after the last row and orders missiles by source row", () => {
+  const result = resolveSkillDuplicate(skillsDoc(), missilesDoc(), "Blade Shield", "Molten Armor");
+  assert.equal(result.skill.targetId, 8, "next id after the highest skill id");
+  assert.deepEqual(result.missiles.map((entry) => entry.originalName), [
+    "blade shield attachment",
+    "blade shield missile"
+  ]);
+  assert.deepEqual(result.missiles.map((entry) => entry.newName), [
+    "molten armor attachment",
+    "molten armor missile"
+  ]);
+  assert.deepEqual(result.missiles.map((entry) => entry.targetId), [4, 5]);
+});
+
+test("resolveSkillDuplicate reports excluded missiles instead of dropping them", () => {
+  const result = resolveSkillDuplicate(skillsDoc(), missilesDoc(), "Fire Bolt", "Ice Bolt");
+  assert.deepEqual(result.missiles.map((entry) => entry.originalName), ["firebolt"]);
+  assert.deepEqual(result.excludedMissiles.map((entry) => entry.originalName), ["fireexplode"]);
+  assert.equal(result.excludedMissiles[0].excluded, true);
+  assert.equal(result.excludedMissiles[0].targetId, null);
+
+  // Forcing it in (the panel's checkbox) duplicates it like any other missile.
+  const forced = resolveSkillDuplicate(skillsDoc(), missilesDoc(), "Fire Bolt", "Ice Bolt", new Set());
+  assert.deepEqual(forced.missiles.map((entry) => entry.originalName), ["firebolt", "fireexplode"]);
+  assert.deepEqual(forced.excludedMissiles, []);
+});
+
+test("resolveSkillDuplicate keeps a proc skill id inside the proc range", () => {
+  const doc = TableDocument.fromText("Skills.txt", [
+    "skill\tId\tsrvmissile",
+    "Fire Bolt\t0\tfirebolt",
+    "Far Skill\t2000\t"
+  ].join("\n"));
+  assert.equal(resolveSkillDuplicate(doc, missilesDoc(), "Fire Bolt", "Ice Bolt").skill.targetId, 2001);
+  assert.equal(resolveSkillDuplicate(doc, missilesDoc(), "Fire Bolt", "Ice Bolt", null, { isProc: true }).skill.targetId, 1);
+});
+
+test("rowForId maps a target id back to its row and reports unknown ids", () => {
+  const doc = missilesDoc();
+  assert.equal(rowForId(doc, 2), 3);
+  assert.equal(rowForId(doc, "3"), 4);
+  assert.equal(rowForId(doc, 99), -1);
+  assert.equal(rowForId(doc, null), -1);
 });

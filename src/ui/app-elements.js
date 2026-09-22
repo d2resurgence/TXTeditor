@@ -67,6 +67,8 @@ export const APP_ELEMENT_IDS = Object.freeze({
   skillDupSourceLabel: "skillDupSourceLabel",
   skillDupSource: "skillDupSource",
   skillDupNewName: "skillDupNewName",
+  skillDupProc: "skillDupProc",
+  skillDupProcLabel: "skillDupProcLabel",
   skillDupResolve: "skillDupResolve",
   skillDupError: "skillDupError",
   skillDupPreview: "skillDupPreview",
