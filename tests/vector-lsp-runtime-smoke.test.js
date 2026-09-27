@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   NO_VECTOR_LSP_EXE_MESSAGE,
+  SIBLING_VECTOR_LSP_DIR,
   defaultVectorRoot,
   findExistingVectorLspExecutable,
   missingVectorLspContribMessage,
@@ -43,7 +44,7 @@ test("Vector-LSP no-executable diagnostic text is explicit without running optio
   assert.match(NO_VECTOR_LSP_EXE_MESSAGE, /^REAL VECTOR-LSP SMOKE NOT RUN:/);
   assert.match(NO_VECTOR_LSP_EXE_MESSAGE, /--vector-lsp-exe or --vector-lsp-root/);
   assert.doesNotMatch(NO_VECTOR_LSP_EXE_MESSAGE, /[A-Za-z]:\\/);
-  assert.equal(defaultVectorRoot(repoRootForDefault()), path.resolve(repoRootForDefault(), "..", "vector-lsp"));
+  assert.equal(defaultVectorRoot(repoRootForDefault()), path.resolve(repoRootForDefault(), "..", SIBLING_VECTOR_LSP_DIR));
 });
 
 test("Vector-LSP required runtime smoke fails nonzero semantics when executable is missing", async () => {

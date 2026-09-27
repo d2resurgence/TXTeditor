@@ -31,8 +31,11 @@ export function missingVectorLspContribMessage(contribSource) {
   return `REAL VECTOR-LSP SMOKE NOT RUN: required contrib directory is missing: ${contribSource}. The runtime set is txteditor.exe + vector-lsp.exe + contrib\\. The smoke never builds an external repository.`;
 }
 
+// Folder name of the vector-lsp checkout beside this repository.
+export const SIBLING_VECTOR_LSP_DIR = "vector-lsp-resurgence";
+
 export function defaultVectorRoot(repoRoot = process.cwd()) {
-  return path.resolve(repoRoot, "..", "vector-lsp");
+  return path.resolve(repoRoot, "..", SIBLING_VECTOR_LSP_DIR);
 }
 
 export function vectorLspExecutableName(platform = process.platform) {

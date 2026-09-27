@@ -11,6 +11,11 @@ pub(crate) fn resource_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
     app.path().resource_dir().ok()
 }
 
+/// Folder name of the vector-lsp checkout that sits beside this repository.
+/// Probed from the repo root and from `src-tauri/` (the working directory under
+/// `tauri dev`). Rename here when the fork's folder is renamed.
+pub(crate) const SIBLING_VECTOR_LSP_DIR: &str = "vector-lsp-resurgence";
+
 pub(crate) fn find_vector_lsp_binary(resource_dir: Option<&Path>) -> Result<PathBuf, String> {
     let exe = if cfg!(windows) {
         "vector-lsp.exe"
@@ -27,8 +32,13 @@ pub(crate) fn find_vector_lsp_binary(resource_dir: Option<&Path>) -> Result<Path
             candidates.push(dir.join(exe));
         }
     }
-    candidates.push(PathBuf::from(format!("../vector-lsp/target/release/{exe}")));
-    candidates.push(PathBuf::from(format!("../vector-lsp/target/debug/{exe}")));
+    for parent in ["..", "../.."] {
+        for profile in ["release", "debug"] {
+            candidates.push(PathBuf::from(format!(
+                "{parent}/{SIBLING_VECTOR_LSP_DIR}/target/{profile}/{exe}"
+            )));
+        }
+    }
 
     for path in &candidates {
         if path.exists() {
@@ -41,7 +51,7 @@ pub(crate) fn find_vector_lsp_binary(resource_dir: Option<&Path>) -> Result<Path
         }
     }
     Err(format!(
-        "vector-lsp binary not found. Set a path in Settings, install it beside the app resources, or build it in ../vector-lsp. Tried: {}",
+        "vector-lsp binary not found. Set a path in Settings, install it beside the app resources, or build it in ../{SIBLING_VECTOR_LSP_DIR}. Tried: {}",
         candidates
             .iter()
             .map(|path| path.display().to_string())
@@ -284,7 +294,10 @@ mod tests {
             error.contains("/nonexistent/txteditor-resources"),
             "{error}"
         );
-        assert!(error.contains("../vector-lsp/target/release/"), "{error}");
+        assert!(
+            error.contains(&format!("../{SIBLING_VECTOR_LSP_DIR}/target/release/")),
+            "{error}"
+        );
     }
 
     #[test]
