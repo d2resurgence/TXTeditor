@@ -125,6 +125,25 @@ export function fillSelectedCellsCommand(doc, ranges, sourceCell) {
   return makeCellCommand("Fill Selected Cells", doc, selectedCellsInGridOrder(ranges).map(({ row, column }) => ({ row, column, value })));
 }
 
+// Fill Down (Resurgence): within each selected range, copy the range's top row into
+// every row below it, column by column. A single-row range has nothing to fill.
+export function fillDownCommand(doc, ranges) {
+  const edits = [];
+  const seen = new Set();
+  for (const range of ranges ?? []) {
+    for (let column = range.left; column <= range.right; column++) {
+      const value = doc.getCell(range.top, column);
+      for (let row = range.top + 1; row <= range.bottom; row++) {
+        const key = `${row}:${column}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        edits.push({ row, column, value });
+      }
+    }
+  }
+  return makeCellCommand("Fill Down", doc, edits);
+}
+
 export function incrementFillCommand(doc, rect) {
   const seed = String(doc.getCell(rect.top, rect.left)).trim();
   if (seed === "") return makeCellCommand("Increment Fill", doc, []);

@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { TableDocument } from "../src/core/table-model.js";
 import { SelectionModel } from "../src/core/selection.js";
-import { clearRangesCommand } from "../src/core/operations.js";
+import { clearRangesCommand, fillDownCommand } from "../src/core/operations.js";
 import {
   CanvasGrid,
   gridColor
@@ -183,4 +183,15 @@ test("release metadata remains 0.5.4 while the README introduction stays version
   assert.equal(tauri.version, "0.5.4");
   assert.match(readme, /^# TXTeditor\r?\n\r?\nTXTeditor is a Windows-focused desktop editor/);
   assert.doesNotMatch(readme, /TXTeditor 0\.5\.4 is/);
+});
+
+test("fillDownCommand copies each range's top row into the rows below it", () => {
+  const doc = TableDocument.fromText("x.txt", "h1\th2\th3\na\tb\tc\n1\t2\t3\n4\t5\t6");
+  const command = fillDownCommand(doc, [{ top: 1, left: 0, bottom: 3, right: 1 }]);
+  command.redo(doc);
+  assert.deepEqual([doc.getCell(2, 0), doc.getCell(2, 1), doc.getCell(3, 0), doc.getCell(3, 1)], ["a", "b", "a", "b"]);
+  assert.equal(doc.getCell(3, 2), "6", "columns outside the range are untouched");
+  command.undo(doc);
+  assert.equal(doc.getCell(3, 0), "4");
+  assert.equal(fillDownCommand(doc, [{ top: 2, left: 0, bottom: 2, right: 2 }]).isEmpty, true, "single row: nothing to fill");
 });

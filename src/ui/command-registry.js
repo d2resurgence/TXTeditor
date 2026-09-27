@@ -19,7 +19,7 @@ export const COMMAND_LABELS_BASE = [
   ["duplicate-skill", "resurgence.duplicateSkill"], ["duplicate-missile", "resurgence.duplicateMissile"], ["save-all", "resurgence.saveAll"],
   ["search-column1", "resurgence.findInFirstColumn"], ["show-column-search", "resurgence.goToColumn"],
   ["reload-file", "resurgence.reload"], ["reload-all", "resurgence.reloadAll"],
-  ["go-to-definition", "menu.goToDefinition"]
+  ["go-to-definition", "menu.goToDefinition"], ["fill-down", "resurgence.fillDown"]
 ];
 
 export const DEVELOPMENT_COMMAND_LABELS = [
@@ -101,6 +101,7 @@ const COMMAND_ACTIONS = new Map([
   ["unhide-columns", { type: "execute", name: "unhideColumns" }],
   ["unhide-all", { type: "handler", name: "unhideAll" }],
   ["fill", { type: "execute", name: "fill" }],
+  ["fill-down", { type: "execute", name: "fill-down" }],
   ["increment-fill", { type: "execute", name: "incrementFill" }],
   ["toggle-freeze-row", { type: "freeze", kind: "row" }],
   ["toggle-freeze-column", { type: "freeze", kind: "column" }],
@@ -174,6 +175,7 @@ export function columnCommandItems({ cloneDisabled = false } = {}) {
 export function fillCommandItems() {
   return [
     { id: "fill", label: tText("menu.fill") },
+    { id: "fill-down", label: tText("resurgence.fillDown") },
     { id: "increment-fill", label: tText("command.increment-fill") }
   ];
 }

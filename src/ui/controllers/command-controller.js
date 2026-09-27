@@ -10,6 +10,7 @@ import {
   clearRangesCommand,
   deleteColumnsCommand,
   deleteRowsCommand,
+  fillDownCommand,
   fillSelectedCellsCommand,
   hiddenColumnsCommand,
   hiddenRowsCommand,
@@ -69,6 +70,7 @@ export function createCommandController({
     if (name === "hideColumn") return execute(hiddenColumnsCommand(columnsForColumnOperation(), true));
     if (name === "unhideColumns") return execute(hiddenColumnsCommand(doc.hiddenColumns, false));
     if (name === "fill") return execute(fillSelectedCellsCommand(doc, state.selection.ranges, state.selection.anchor));
+    if (name === "fill-down") return execute(fillDownCommand(doc, state.selection.ranges));
     if (name === "incrementFill") return execute(incrementFillSelectedCellsCommand(doc, state.selection.ranges, state.selection.anchor));
   }
 

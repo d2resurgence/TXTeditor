@@ -1389,7 +1389,7 @@ test("closing an active Vector tab waits for didClose before rebinding the revea
 
 test("context menu command item registries preserve expected command groups", () => {
   assert.deepEqual(columnCommandItems().map((item) => item.id), ["add-column", "insert-column", "hide-column", "delete-column", "clone-column"]);
-  assert.deepEqual(fillCommandItems().map((item) => item.id), ["fill", "increment-fill"]);
+  assert.deepEqual(fillCommandItems().map((item) => item.id), ["fill", "fill-down", "increment-fill"]);
   assert.deepEqual(mathCommandItems().map((item) => item.id), ["math-add", "math-subtract", "math-multiply", "math-divide"]);
 });
 
