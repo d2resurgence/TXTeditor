@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1.13",
+  "referenceVersion": "1.13c",
+  "debugLogging": false,
+  "jsonDiagnostics": false,
+  "jsonDiagnosticRules": {
+    "duplicateIds": {
+      "action": "warn"
+    },
+    "stringFormat": {
+      "action": "warn"
+    },
+    "keyUsage": {
+      "action": "ignore",
+      "idStart": 40000.0
+    }
+  },
+  "autofitColumns": {
+    "*": true,
+    "MonStats": [
+      "BaseId",
+      "NextInClass",
+      "NameStr"
+    ],
+    "Skills": [
+      "skilldesc",
+      "srvmissile"
+    ]
+  }
+}

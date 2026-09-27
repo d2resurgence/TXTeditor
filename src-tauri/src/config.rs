@@ -169,6 +169,12 @@ pub(crate) struct AppConfig {
     // Resurgence: columns to auto-fit on open, keyed by file base name ("*" = every file).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) autofit_columns: Option<serde_json::Value>,
+    // Resurgence: reopen the last workspace folder on a fresh launch, not only on reload.
+    #[serde(default)]
+    pub(crate) restore_workspace: bool,
+    // Resurgence: folder opened on launch when no workspace has been remembered yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) last_workspace_path: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -185,6 +191,8 @@ impl Default for AppConfig {
             json_diagnostic_rules: JsonDiagnosticRules::default(),
             strings_path: None,
             autofit_columns: None,
+            restore_workspace: false,
+            last_workspace_path: None,
         }
     }
 }
@@ -335,6 +343,8 @@ mod tests {
             },
             strings_path: None,
             autofit_columns: None,
+            restore_workspace: true,
+            last_workspace_path: Some("E:\\Mod\\data".to_string()),
         };
         let json = serde_json::to_string(&config).unwrap();
 
@@ -350,6 +360,35 @@ mod tests {
         assert!(!json.contains("schema_path"));
         assert!(!json.contains("schemaPath"));
         assert!(!json.contains("pluginPath"));
+        assert!(json.contains("\"restoreWorkspace\":true"));
+        assert!(json.contains("\"lastWorkspacePath\":\"E:\\\\Mod\\\\data\""));
+    }
+
+    #[test]
+    fn workspace_restore_keys_survive_load_and_default_off() {
+        let dir = std::env::temp_dir().join(format!(
+            "txteditor-config-restore-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        fs::write(
+            &path,
+            r#"{"schemaVersion":"1.13","restoreWorkspace":true,"lastWorkspacePath":"E:\\Mod\\data"}"#,
+        )
+        .unwrap();
+
+        let config = load_app_config_from(&path);
+        assert!(config.restore_workspace);
+        assert_eq!(config.last_workspace_path.as_deref(), Some("E:\\Mod\\data"));
+
+        let defaults = AppConfig::default();
+        assert!(!defaults.restore_workspace);
+        let json = serde_json::to_string(&defaults).unwrap();
+        assert!(!json.contains("lastWorkspacePath"));
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

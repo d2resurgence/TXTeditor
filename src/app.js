@@ -4,6 +4,7 @@ import { canNavigateLocalizationJsonDiagnostic } from "./core/json-document-poli
 import { makeCellCommand } from "./core/undo.js";
 import { resetUndoManagerForDocument } from "./core/document-undo-state.js";
 import {
+  getConfig,
   isTauriRuntime,
   listenForNativeOpenPaths,
   startupOpenPathsNative
@@ -335,6 +336,7 @@ documentController = createDocumentController({
   reportLspCloseFailure,
   lspRebindSavedDoc: (doc, previousUri) => lspController.rebindSavedDoc(doc, previousUri),
   lspStartWorkspace, lspClaimSession: () => lspController.claimSession(), lspStopSession: (reason) => lspController.stopSession(reason),
+  readStartupConfig: getConfig,
   ensureDocumentSession: lspController.ensureStandaloneSession,
   scheduleHoverPrewarm,
   resetUndoManagerForDocument,

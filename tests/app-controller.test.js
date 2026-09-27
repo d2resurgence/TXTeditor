@@ -883,6 +883,103 @@ test("#85 a fresh app launch clears the previous workspace without skipping nati
   }
 });
 
+test("Resurgence: a fresh launch with restoreWorkspace reopens the remembered folder and keeps it", async () => {
+  const originalWindow = globalThis.window;
+  const values = new Map([[WORKSPACE_PATH_STORAGE_KEY, "E:\Mod\data"]]);
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key)
+  };
+  const calls = [];
+  const starts = [];
+  globalThis.window = { __TAURI__: { core: { invoke: async (command, args) => {
+    calls.push([command, args]);
+    return { path: args.path, files: [] };
+  } } } };
+
+  try {
+    const { controller, state } = testDocumentController([], {}, {
+      storage,
+      sessionStorage: workspaceReloadSessionStorage(false),
+      readStartupConfig: async () => ({ restoreWorkspace: true, lastWorkspacePath: "E:\Other" }),
+      lintEngine: "vector-lsp",
+      isVectorLintEngine: () => true,
+      isLegacyLintEngine: () => false,
+      lspStartWorkspace: async (...args) => starts.push(args)
+    });
+
+    assert.equal(await controller.restoreWorkspace(), true);
+    assert.deepEqual(calls, [["list_workspace_files", { path: "E:\Mod\data" }]]);
+    assert.equal(state.workspace.path, "E:\Mod\data");
+    assert.equal(values.get(WORKSPACE_PATH_STORAGE_KEY), "E:\Mod\data");
+    assert.deepEqual(starts, [["E:\Mod\data", { includeSubfolders: true }]]);
+  } finally {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  }
+});
+
+test("Resurgence: a fresh launch falls back to lastWorkspacePath when the remembered folder is gone", async () => {
+  const originalWindow = globalThis.window;
+  const values = new Map([[WORKSPACE_PATH_STORAGE_KEY, "E:\Deleted"]]);
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key)
+  };
+  const listed = [];
+  globalThis.window = { __TAURI__: { core: { invoke: async (command, args) => {
+    listed.push(args.path);
+    if (args.path === "E:\Deleted") throw new Error("workspace unavailable");
+    return { path: args.path, files: [] };
+  } } } };
+
+  try {
+    const { controller, state } = testDocumentController([], {}, {
+      storage,
+      sessionStorage: workspaceReloadSessionStorage(false),
+      readStartupConfig: async () => ({ restoreWorkspace: true, lastWorkspacePath: "E:\Mod\data" })
+    });
+
+    assert.equal(await controller.restoreWorkspace(), true);
+    assert.deepEqual(listed, ["E:\Deleted", "E:\Mod\data"]);
+    assert.equal(state.workspace.path, "E:\Mod\data");
+    assert.equal(values.get(WORKSPACE_PATH_STORAGE_KEY), "E:\Mod\data");
+  } finally {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  }
+});
+
+test("Resurgence: a fresh launch without restoreWorkspace keeps upstream's clear-on-launch", async () => {
+  const originalWindow = globalThis.window;
+  const values = new Map([[WORKSPACE_PATH_STORAGE_KEY, "E:\Mod\data"]]);
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key)
+  };
+  let listCalls = 0;
+  globalThis.window = { __TAURI__: { core: { invoke: async () => { listCalls += 1; } } } };
+
+  try {
+    const { controller, state } = testDocumentController([], {}, {
+      storage,
+      sessionStorage: workspaceReloadSessionStorage(false),
+      readStartupConfig: async () => ({ restoreWorkspace: false, lastWorkspacePath: "E:\Mod\data" })
+    });
+
+    assert.equal(await controller.restoreWorkspace(), false);
+    assert.equal(listCalls, 0);
+    assert.equal(values.has(WORKSPACE_PATH_STORAGE_KEY), false);
+    assert.equal(state.workspace, null);
+  } finally {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  }
+});
+
 test("#84 WebView reload restores the saved workspace from current disk state with existing folder options", async () => {
   const originalWindow = globalThis.window;
   const values = new Map([[WORKSPACE_PATH_STORAGE_KEY, "E:\\SavedWorkspace"]]);
@@ -2138,6 +2235,7 @@ function testDocumentController(docOrDocs, gridOverrides = {}, options = {}) {
     resetWorkspaceView: options.resetWorkspaceView ?? (() => {}),
     scrollProblemsToActiveFile: options.scrollProblemsToActiveFile ?? (() => {}),
     resizeOpenedDocumentToFit: options.resizeOpenedDocumentToFit ?? (async () => {}),
+    readStartupConfig: options.readStartupConfig,
     storage: options.storage,
     sessionStorage: options.sessionStorage
   });

@@ -44,6 +44,7 @@ import {
 } from "../document-lifecycle-policy.js";
 import { tText } from "../../core/i18n.js";
 import { createWorkspaceProfile, parseWorkspaceProfile, workspaceProfilePath, WORKSPACE_PROFILE_EXTENSION } from "../../core/workspace-profile.js";
+import { restoresWorkspaceOnStartup, startupWorkspaceCandidates } from "../../core/workspace-restore-policy.js";
 import { pickFilePath, saveTextNative } from "../../core/io.js";
 
 export const WORKSPACE_PATH_STORAGE_KEY = "txteditor.workspacePath";
@@ -136,6 +137,7 @@ export function createDocumentController({
   forgetExternalFileWatch = () => {},
   resolveExternalFileChangeAfterReload = () => {},
   isExternalSaveConflict = async () => false,
+  readStartupConfig = async () => ({}),
   storage = globalThis.localStorage,
   sessionStorage = globalThis.sessionStorage
 }) {
@@ -594,22 +596,25 @@ export function createDocumentController({
   async function restoreWorkspace() {
     if (!isTauriRuntime()) return false;
     await lspClaimSession();
-    if (!isWorkspaceReload()) {
+    const isReload = isWorkspaceReload();
+    const config = isReload ? {} : await readStartupConfig().catch(() => ({}));
+    if (!restoresWorkspaceOnStartup({ isReload, config })) {
       writeWorkspacePath("");
       return false;
     }
-    const path = readWorkspacePath();
-    if (!path) return false;
+    const candidates = startupWorkspaceCandidates({ isReload, storedPath: readWorkspacePath(), config });
+    if (!candidates.length) return false;
     const includeSubfolders = !state.excludeWorkspaceSubfolders;
-    try {
-      const workspace = await listWorkspaceNative(path, null, { includeSubfolders });
-      await activateWorkspace(workspace, includeSubfolders, false);
-      return true;
-    } catch {
-      state.workspace = null;
-      renderChrome();
-      return false;
+    for (const path of candidates) {
+      try {
+        const workspace = await listWorkspaceNative(path, null, { includeSubfolders });
+        await activateWorkspace(workspace, includeSubfolders, !isReload);
+        return true;
+      } catch {}
     }
+    state.workspace = null;
+    renderChrome();
+    return false;
   }
 
   async function activateWorkspace(workspace, includeSubfolders, persist) {
