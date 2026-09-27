@@ -18,11 +18,11 @@ on:
       vector_lsp_repo:
         description: "Repository to build vector-lsp from"
         type: string
-        default: "yinyin333333/vector-lsp"
+        default: "d2resurgence/vector-lsp-resurgence"
       vector_lsp_ref:
         description: "Ref of vector_lsp_repo to build"
         type: string
-        default: "master"
+        default: "resurgence"
 
 permissions:
   contents: write
@@ -69,8 +69,8 @@ jobs:
       - name: Checkout vector-lsp
         uses: actions/checkout@v6
         with:
-          repository: ${{ inputs.vector_lsp_repo || 'yinyin333333/vector-lsp' }}
-          ref: ${{ inputs.vector_lsp_ref || 'master' }}
+          repository: ${{ inputs.vector_lsp_repo || 'd2resurgence/vector-lsp-resurgence' }}
+          ref: ${{ inputs.vector_lsp_ref || 'resurgence' }}
           path: vector-lsp
 
       - uses: dtolnay/rust-toolchain@stable
@@ -153,8 +153,8 @@ jobs:
       - name: Checkout vector-lsp
         uses: actions/checkout@v6
         with:
-          repository: ${{ inputs.vector_lsp_repo || 'yinyin333333/vector-lsp' }}
-          ref: ${{ inputs.vector_lsp_ref || 'master' }}
+          repository: ${{ inputs.vector_lsp_repo || 'd2resurgence/vector-lsp-resurgence' }}
+          ref: ${{ inputs.vector_lsp_ref || 'resurgence' }}
           path: vector-lsp
 
       - name: Install Tauri system dependencies

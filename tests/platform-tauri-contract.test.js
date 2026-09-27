@@ -285,9 +285,11 @@ test("Vector-LSP packaging contract keeps adjacent executable and contrib resour
   assert.match(rustLspLaunch, /std::env::current_exe\(\)/);
   assert.match(rustLspLaunch, /candidates\.push\(dir\.join\(exe\)\)/);
 
-  // vector-lsp is built from yinyin's fork by default, never the original
-  // upstream. The repo is a dispatch input, so assert on the default.
-  assert.match(releaseWorkflow, /'yinyin333333\/vector-lsp'/);
+  // vector-lsp is built from our fork of yinyin's fork (branch resurgence) by
+  // default, never the original upstream. The repo is a dispatch input, so
+  // assert on the default.
+  assert.match(releaseWorkflow, /'d2resurgence\/vector-lsp-resurgence'/);
+  assert.match(releaseWorkflow, /inputs\.vector_lsp_ref \|\| 'resurgence'/);
   assert.doesNotMatch(releaseWorkflow, /eezstreet\/vector-lsp/);
 
   // Windows portable zip: editor, LSP and contrib land as siblings.
