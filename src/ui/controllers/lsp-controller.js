@@ -891,6 +891,29 @@ export function createLspController({
     return Boolean(docToUri(activeDoc()));
   }
 
+  // For the context menu: "yes" (string key), "no" (nothing can resolve it), or "maybe"
+  // (only vector-lsp can say; ask with probeDefinition).
+  function definitionAvailability(row, col) {
+    const doc = activeDoc();
+    if (!doc || doc.kind === "json") return "no";
+    if (stringGoTo.cellHasReference(row, col)) return "yes";
+    if (!isVectorLintEngine() || !state.lsp.started || !docToUri(doc)) return "no";
+    return "maybe";
+  }
+
+  async function probeDefinition(row, col) {
+    const doc = activeDoc();
+    const uri = docToUri(doc);
+    if (!uri || !state.lsp.started) return false;
+    if (!String(doc.getCell(row, col) ?? "").trim()) return false;
+    try {
+      const result = await lspDefinitionRequest(uri, row, computeCharOffset(doc, row, col), state.lsp.generation ?? 0);
+      return Boolean(result && pathFromUri(result.uri));
+    } catch {
+      return false;
+    }
+  }
+
   function handleReady(payload = {}) {
     const generation = Number(payload.generation ?? 0);
     if (!generation || generation !== state.lsp.generation) return;
@@ -940,6 +963,8 @@ export function createLspController({
   return {
     appendLog: appendLspLog,
     cellHasReference,
+    definitionAvailability,
+    probeDefinition,
     changeLocale,
     clearVisibleHover: hoverController.clearVisibleHover,
     closeDoc,

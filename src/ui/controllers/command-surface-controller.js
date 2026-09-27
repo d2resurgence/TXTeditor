@@ -25,6 +25,8 @@ export function createCommandSurfaceController({
   activeDoc,
   rowsForContextOperation,
   cellHasReference,
+  definitionAvailability = (row, col) => (cellHasReference(row, col) ? "yes" : "no"),
+  probeDefinition = async () => false,
   clearVisibleLspHover,
   showError,
   escapeHtml,
@@ -66,7 +68,21 @@ export function createCommandSurfaceController({
     };
   }
 
-  function showContextMenu({ x, y, hit }) {
+  let definitionProbeToken = 0;
+
+  // Only vector-lsp knows whether a cell resolves, so the menu opens at once and the
+  // entry is added when the server confirms this exact cell.
+  function probeDefinitionForMenu({ x, y, hit }, row, column) {
+    const token = ++definitionProbeToken;
+    Promise.resolve(probeDefinition(row, column)).then((found) => {
+      if (!found || token !== definitionProbeToken || !state.contextMenuOpen) return;
+      const current = state.contextHit;
+      if (current !== hit) return;
+      showContextMenu({ x, y, hit, definitionResolved: true });
+    }).catch(() => {});
+  }
+
+  function showContextMenu({ x, y, hit, definitionResolved = false }) {
     els.contextMenu.classList.remove("compact-action-menu");
     diagnosticContextMenu = null;
     state.contextHit = hit;
@@ -76,8 +92,11 @@ export function createCommandSurfaceController({
     const canUnhide = doc.hiddenRows.size > 0 || doc.hiddenColumns.size > 0;
     const focusRow = hit?.row ?? state.selection.focus.row;
     const focusCol = hit?.column ?? state.selection.focus.column;
+    const availability = definitionResolved ? "yes" : definitionAvailability(focusRow, focusCol);
+    if (availability === "maybe") probeDefinitionForMenu({ x, y, hit }, focusRow, focusCol);
+    else definitionProbeToken++;
     const entries = [
-      ...(cellHasReference(focusRow, focusCol)
+      ...(availability === "yes"
         ? [{ id: "go-to-definition", label: tText("menu.goToDefinition") }]
         : []),
       ...extraContextMenuEntries({ focusRow, focusCol, doc: activeDoc() }),

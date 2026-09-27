@@ -478,6 +478,8 @@ commandSurfaceController = createCommandSurfaceController({
   activeDoc,
   rowsForContextOperation,
   cellHasReference,
+  definitionAvailability: (row, col) => lspController.definitionAvailability(row, col),
+  probeDefinition: (row, col) => lspController.probeDefinition(row, col),
   clearVisibleLspHover,
   showError,
   escapeHtml, manualHighlights: manualHighlightController,
