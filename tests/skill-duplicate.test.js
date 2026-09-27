@@ -293,3 +293,24 @@ test("resolveSkillDuplicate reuses unused placeholder rows on either side of the
   assert.equal(resolveSkillDuplicate(doc, missilesDoc(), "Fire Bolt", "Ice Bolt", null, { isProc: true }).skill.targetId, 1);
   assert.equal(rowForId(doc, 1024), 4);
 });
+
+test("resolveSkillDuplicate lists missiles in chain order and keeps generated names lowercase", () => {
+  const skills = TableDocument.fromText("Skills.txt", [
+    "skill\tId\tsrvmissile",
+    "Fire Trap\t0\tfire trap in air"
+  ].join("\n"));
+  const missiles = TableDocument.fromText("Missiles.txt", [
+    "Missile\tId\tSubMissile1\tExplosionMissile",
+    "bomb explosion\t0\t\t",
+    "fire trap in air\t1\tfire trap on ground\t",
+    "fire trap on ground\t2\t\tbomb explosion"
+  ].join("\n"));
+  const result = resolveSkillDuplicate(skills, missiles, "Fire Trap", "Plasma Snare");
+  // "bomb explosion" sits first in the file but is the last link of the chain.
+  assert.deepEqual(result.missiles.map((entry) => entry.newName), [
+    "plasma snare in air",
+    "plasma snare on ground",
+    "plasma snare bomb explosion"
+  ]);
+  assert.deepEqual(result.missiles.map((entry) => entry.targetId), [3, 4, 5]);
+});

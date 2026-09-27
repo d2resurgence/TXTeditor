@@ -18,7 +18,8 @@ export const COMMAND_LABELS_BASE = [
   ["open-app-settings", "command.open-app-settings"], ["open-shortcut-settings", "command.open-shortcut-settings"], ["open-settings", "command.open-settings"],
   ["duplicate-skill", "resurgence.duplicateSkill"], ["duplicate-missile", "resurgence.duplicateMissile"], ["save-all", "resurgence.saveAll"],
   ["search-column1", "resurgence.findInFirstColumn"], ["show-column-search", "resurgence.goToColumn"],
-  ["reload-file", "resurgence.reload"], ["reload-all", "resurgence.reloadAll"]
+  ["reload-file", "resurgence.reload"], ["reload-all", "resurgence.reloadAll"],
+  ["go-to-definition", "menu.goToDefinition"]
 ];
 
 export const DEVELOPMENT_COMMAND_LABELS = [

@@ -120,6 +120,7 @@ export function createSkillDupController({
       unchanged.filter((item) => item.kind === "missile").map((item) => item.entry)
     );
     const skillUnchanged = unchanged.some((item) => item.kind === "skill");
+    const clashingIds = findClashingTargetIds(changeset.missiles);
 
     for (const row of els.skillDupBody.querySelectorAll("tr")) {
       const kind = row.dataset.kind;
@@ -132,9 +133,25 @@ export function createSkillDupController({
           ? skillUnchanged && duplicateNameUnchanged(entry.originalName, entry.newName)
           : unchangedMissiles.has(entry);
       newNameInput.classList.toggle("skill-dup-name-unchanged", needsEdit);
+      const targetInput = row.querySelector('input[data-field="targetId"]');
+      targetInput?.classList.toggle("skill-dup-name-unchanged", clashingIds.has(entry));
     }
 
-    els.skillDupApply.disabled = unchanged.length > 0;
+    els.skillDupApply.disabled = unchanged.length > 0 || clashingIds.size > 0;
+  }
+
+  // Two pending missiles aimed at the same Id would overwrite each other on Apply.
+  function findClashingTargetIds(entries) {
+    const byId = new Map();
+    for (const entry of entries) {
+      if (entry.excluded || entry.targetId == null || String(entry.targetId).trim() === "") continue;
+      const key = String(parseInt(entry.targetId, 10));
+      if (!byId.has(key)) byId.set(key, []);
+      byId.get(key).push(entry);
+    }
+    const clashing = new Set();
+    for (const group of byId.values()) if (group.length > 1) group.forEach((entry) => clashing.add(entry));
+    return clashing;
   }
 
   function previewRows(nextChangeset) {
@@ -143,7 +160,7 @@ export function createSkillDupController({
     const missiles = [
       ...nextChangeset.missiles.map((entry) => ({ kind: "missile", entry })),
       ...(nextChangeset.excludedMissiles ?? []).map((entry) => ({ kind: "missile", entry }))
-    ].sort((a, b) => a.entry.sourceRow - b.entry.sourceRow);
+    ].sort((a, b) => (a.entry.order ?? a.entry.sourceRow) - (b.entry.order ?? b.entry.sourceRow));
     return rows.concat(missiles);
   }
 
@@ -167,7 +184,7 @@ export function createSkillDupController({
         <td>${kind}</td>
         <td>${escapeHtml(entry.originalName)}</td>
         <td><input type="text" value="${escapeHtml(entry.newName)}" data-field="newName"${disabled} /></td>
-        <td class="row-num"><input type="text" value="${escapeHtml(targetVal)}" placeholder="append" data-field="targetId"${disabled} /></td>
+        <td class="row-num"><input type="text" value="${escapeHtml(targetVal)}" placeholder="${excluded ? "" : "append"}" data-field="targetId"${disabled} /></td>
       </tr>`;
     }).join("");
 
@@ -187,8 +204,13 @@ export function createSkillDupController({
       });
       for (const input of row.querySelectorAll('input[type="text"]')) {
         input.addEventListener("input", () => {
-          if (input.dataset.field === "newName") entry.newName = input.value;
-          else entry.targetId = input.value.trim() === "" ? null : input.value.trim();
+          if (input.dataset.field === "newName") {
+            entry.newName = input.value;
+            entry.nameEdited = true;
+          } else {
+            entry.targetId = input.value.trim() === "" ? null : input.value.trim();
+            entry.targetIdEdited = true;
+          }
           refreshPreviewValidation();
         });
       }
@@ -347,7 +369,10 @@ export function createSkillDupController({
     if (!changeset) return null;
     const edits = new Map();
     for (const { entry } of previewRows(changeset)) {
-      edits.set(entry.originalName.trim().toLowerCase(), { newName: entry.newName, targetId: entry.targetId });
+      edits.set(entry.originalName.trim().toLowerCase(), {
+        newName: entry.nameEdited ? entry.newName : undefined,
+        targetId: entry.targetIdEdited ? entry.targetId : undefined
+      });
     }
     return edits;
   }
@@ -357,8 +382,16 @@ export function createSkillDupController({
     for (const { entry } of previewRows(nextChangeset)) {
       const previous = edits.get(entry.originalName.trim().toLowerCase());
       if (!previous) continue;
-      entry.newName = previous.newName;
-      if (!entry.excluded && previous.targetId != null) entry.targetId = previous.targetId;
+      // Freshly allocated ids are kept unless the user typed one: restoring an old
+      // auto-assigned id would collide with the ids handed out on this resolve.
+      if (previous.newName !== undefined) {
+        entry.newName = previous.newName;
+        entry.nameEdited = true;
+      }
+      if (!entry.excluded && previous.targetId !== undefined) {
+        entry.targetId = previous.targetId;
+        entry.targetIdEdited = true;
+      }
     }
     return nextChangeset;
   }

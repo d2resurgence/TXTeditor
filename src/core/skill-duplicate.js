@@ -3,12 +3,14 @@ const SKILL_MISSILE_COLS = [
   'cltmissile', 'cltmissilea', 'cltmissileb', 'cltmissilec',
 ];
 
+// Traversal order matters: duplicates are listed (and given ids) in chain order, parent
+// first, and the explosion missile comes after the sub-missiles it would otherwise precede.
 const MISSILE_SUB_COLS = [
-  'explosionmissile',
   'submissile1', 'submissile2', 'submissile3',
   'hitsubmissile1', 'hitsubmissile2', 'hitsubmissile3', 'hitsubmissile4',
   'cltsubmissile1', 'cltsubmissile2', 'cltsubmissile3',
   'clthitsubmissile1', 'clthitsubmissile2', 'clthitsubmissile3', 'clthitsubmissile4',
+  'explosionmissile',
 ];
 
 export const EXCLUDE_DEFAULT = new Set([
@@ -41,6 +43,7 @@ function getRowValues(doc, rowNum) {
 function collectMissileTree(rootNames, missileByName, missilesDoc, subColIdxs, exclude) {
   const visited = new Set();
   const skipped = new Set();
+  const discovered = [];
   const queue = rootNames.map(n => n.toLowerCase()).filter(Boolean);
   while (queue.length) {
     const name = queue.shift();
@@ -49,21 +52,25 @@ function collectMissileTree(rootNames, missileByName, missilesDoc, subColIdxs, e
     if (row == null) continue;
     // Excluded missiles are reported so the panel can offer to force-duplicate them,
     // but their own sub-missiles are not pulled in unless the user includes them.
-    if (exclude.has(name)) { skipped.add(name); continue; }
+    if (exclude.has(name)) { skipped.add(name); discovered.push(name); continue; }
     visited.add(name);
+    discovered.push(name);
     for (const idx of subColIdxs) {
       if (idx < 0) continue;
       const sub = missilesDoc.getCell(row, idx).trim().toLowerCase();
       if (sub && !visited.has(sub)) queue.push(sub);
     }
   }
-  return { included: visited, excluded: skipped };
+  const order = new Map();
+  for (const name of discovered) if (!order.has(name)) order.set(name, order.size);
+  return { included: visited, excluded: skipped, order };
 }
 
-// Duplicated rows keep the order they appear in the source file; references are
-// remapped by name, so write order does not matter.
-function bySourceRow(entries) {
-  return [...entries].sort((a, b) => a.sourceRow - b.sourceRow);
+// Duplicated rows follow the missile chain (breadth-first from the skill's own missiles);
+// references are remapped by name, so write order does not affect correctness.
+function byChainOrder(entries, order) {
+  for (const entry of entries) entry.order = order.get(entry.originalName.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+  return [...entries].sort((a, b) => a.order - b.order);
 }
 
 function assignIds(entries, nextId) {
@@ -250,10 +257,9 @@ export function deriveMissileNewName(origName, transform, context = {}) {
 function prefixWithNewRoot(orig, affix) {
   const root = (affix ?? '').trim();
   if (!root) return orig;
-  if (!/\s/.test(orig) && orig === orig.toLowerCase()) {
-    return root.replace(/\s+/g, '').toLowerCase() + orig;
-  }
-  return `${root} ${orig}`;
+  const lowercase = orig === orig.toLowerCase();
+  if (!/\s/.test(orig) && lowercase) return root.replace(/\s+/g, '').toLowerCase() + orig;
+  return `${lowercase ? root.toLowerCase() : root} ${orig}`;
 }
 
 export function duplicateNameUnchanged(originalName, newName) {
@@ -315,7 +321,7 @@ export function resolveSkillDuplicate(skillsDoc, missilesDoc, skillName, newSkil
     .map(idx => idx >= 0 ? skillsDoc.getCell(sourceRow, idx).trim() : '')
     .filter(Boolean);
 
-  const { included, excluded: skippedMissiles } = collectMissileTree(rootMissiles, missileByName, missilesDoc, subColIdxs, exclude);
+  const { included, excluded: skippedMissiles, order } = collectMissileTree(rootMissiles, missileByName, missilesDoc, subColIdxs, exclude);
   const missileIdColIdx = mCols.get('id') ?? -1;
   const nextMissileId = makeIdSuggester(missilesDoc, missileIdColIdx, { nameColIdx: missileNameColIdx });
   const nextSkillId = makeIdSuggester(skillsDoc, skillIdColIdx, { isProc, nameColIdx: skillNameColIdx, skillRanges: true });
@@ -332,8 +338,8 @@ export function resolveSkillDuplicate(skillsDoc, missilesDoc, skillName, newSkil
     };
   };
 
-  const missiles = assignIds(bySourceRow([...included].map(ml => buildEntry(ml, false))), nextMissileId);
-  const excludedMissiles = bySourceRow([...skippedMissiles].map(ml => buildEntry(ml, true)));
+  const missiles = assignIds(byChainOrder([...included].map(ml => buildEntry(ml, false)), order), nextMissileId);
+  const excludedMissiles = byChainOrder([...skippedMissiles].map(ml => buildEntry(ml, true)), order);
 
   return {
     transform,
@@ -365,7 +371,7 @@ export function resolveMissileDuplicate(missilesDoc, missileName, newMissileName
 
   const transform = detectNameTransform(sl, nl);
   const subColIdxs = MISSILE_SUB_COLS.map(c => mCols.get(c) ?? -1);
-  const { included, excluded: skippedMissiles } = collectMissileTree([sl], missileByName, missilesDoc, subColIdxs, exclude);
+  const { included, excluded: skippedMissiles, order } = collectMissileTree([sl], missileByName, missilesDoc, subColIdxs, exclude);
   const nextId = makeIdSuggester(missilesDoc, mCols.get('id') ?? -1, { nameColIdx: missileNameColIdx });
 
   const buildEntry = (ml, isExcluded) => {
@@ -384,8 +390,8 @@ export function resolveMissileDuplicate(missilesDoc, missileName, newMissileName
     };
   };
 
-  const missiles = assignIds(bySourceRow([...included].map(ml => buildEntry(ml, false))), nextId);
-  const excludedMissiles = bySourceRow([...skippedMissiles].map(ml => buildEntry(ml, true)));
+  const missiles = assignIds(byChainOrder([...included].map(ml => buildEntry(ml, false)), order), nextId);
+  const excludedMissiles = byChainOrder([...skippedMissiles].map(ml => buildEntry(ml, true)), order);
 
   return { transform, missiles, excludedMissiles };
 }
