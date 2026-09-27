@@ -110,11 +110,33 @@ export function allocateId(used, { isProc = false, claimed = null } = {}) {
   return null;
 }
 
-function makeIdSuggester(doc, idColIdx, { isProc = false } = {}) {
+// Placeholder rows ("unused491", ...) reserve an Id; reusing them keeps a padded table
+// at its fixed size. Proc skills take a placeholder below the proc limit, everything
+// else one above 1023 so the proc range is left free. Without a placeholder in range,
+// fall back to allocateId (append, or the lowest free proc Id).
+export function isPlaceholderName(name) {
+  return /^unused/i.test(String(name ?? '').trim());
+}
+
+function placeholderSlots(doc, idColIdx, nameColIdx) {
+  const slots = [];
+  if (idColIdx < 0 || nameColIdx < 0) return slots;
+  for (let r = 1; r < doc.rowCount; r++) {
+    if (!isPlaceholderName(doc.getCell(r, nameColIdx))) continue;
+    const id = parseInt(doc.getCell(r, idColIdx), 10);
+    if (!Number.isNaN(id)) slots.push(id);
+  }
+  return slots.sort((a, b) => a - b);
+}
+
+function makeIdSuggester(doc, idColIdx, { isProc = false, nameColIdx = -1, skillRanges = false } = {}) {
   const used = collectUsedIds(doc, idColIdx);
+  const slots = placeholderSlots(doc, idColIdx, nameColIdx);
+  const inRange = (id) => !skillRanges || (isProc ? id <= PROC_SKILL_ID_LIMIT : id > PROC_SKILL_ID_LIMIT + 1);
   const claimed = new Set();
   return function next() {
-    const id = allocateId(used, { isProc, claimed });
+    const slot = slots.find((id) => !claimed.has(id) && inRange(id));
+    const id = slot ?? allocateId(used, { isProc, claimed });
     if (id != null) claimed.add(id);
     return id;
   };
@@ -295,8 +317,8 @@ export function resolveSkillDuplicate(skillsDoc, missilesDoc, skillName, newSkil
 
   const { included, excluded: skippedMissiles } = collectMissileTree(rootMissiles, missileByName, missilesDoc, subColIdxs, exclude);
   const missileIdColIdx = mCols.get('id') ?? -1;
-  const nextMissileId = makeIdSuggester(missilesDoc, missileIdColIdx);
-  const nextSkillId = makeIdSuggester(skillsDoc, skillIdColIdx, { isProc });
+  const nextMissileId = makeIdSuggester(missilesDoc, missileIdColIdx, { nameColIdx: missileNameColIdx });
+  const nextSkillId = makeIdSuggester(skillsDoc, skillIdColIdx, { isProc, nameColIdx: skillNameColIdx, skillRanges: true });
 
   const buildEntry = (ml, isExcluded) => {
     const srcRow = missileByName.get(ml);
@@ -344,7 +366,7 @@ export function resolveMissileDuplicate(missilesDoc, missileName, newMissileName
   const transform = detectNameTransform(sl, nl);
   const subColIdxs = MISSILE_SUB_COLS.map(c => mCols.get(c) ?? -1);
   const { included, excluded: skippedMissiles } = collectMissileTree([sl], missileByName, missilesDoc, subColIdxs, exclude);
-  const nextId = makeIdSuggester(missilesDoc, mCols.get('id') ?? -1);
+  const nextId = makeIdSuggester(missilesDoc, mCols.get('id') ?? -1, { nameColIdx: missileNameColIdx });
 
   const buildEntry = (ml, isExcluded) => {
     const srcRow = missileByName.get(ml);

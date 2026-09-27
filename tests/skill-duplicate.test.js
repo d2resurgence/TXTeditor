@@ -277,3 +277,19 @@ test("string GoToDef covers the display-string columns audited against Resurgenc
     assert.equal(isStringKeyCol(column, file), false, `${file}:${column} should not be a string key column`);
   }
 });
+
+test("resolveSkillDuplicate reuses unused placeholder rows on either side of the proc limit", () => {
+  const doc = TableDocument.fromText("Skills.txt", [
+    "skill\tId\tsrvmissile",
+    "Fire Bolt\t0\tfirebolt",
+    "unused1\t1\t",
+    "unused1023\t1023\t",
+    "unused1024\t1024\t",
+    "unused1025\t1025\t"
+  ].join("\n"));
+  // Non-proc skills skip the proc range (and Id 1023) and overwrite the first placeholder above it.
+  assert.equal(resolveSkillDuplicate(doc, missilesDoc(), "Fire Bolt", "Ice Bolt").skill.targetId, 1024);
+  // Proc skills take the first placeholder below the limit.
+  assert.equal(resolveSkillDuplicate(doc, missilesDoc(), "Fire Bolt", "Ice Bolt", null, { isProc: true }).skill.targetId, 1);
+  assert.equal(rowForId(doc, 1024), 4);
+});
