@@ -1799,6 +1799,24 @@ details:not([open]) .problem-file-header::before {
   gap: 6px;
 }
 
+.column-search.quick-open {
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 32px));
+}
+
+.quick-open .column-search-results button {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quick-open-hint {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .column-search.hidden {
   display: none;
 }

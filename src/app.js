@@ -59,6 +59,7 @@ import { createManualHighlightController } from "./ui/manual-highlight.js";
 import { t, tText } from "./core/i18n.js";
 import { createStringGotoController } from "./ui/controllers/string-goto-controller.js";
 import { createSkillDupController } from "./ui/controllers/skill-dup-controller.js";
+import { createQuickOpenController } from "./ui/controllers/quick-open-controller.js";
 import { createColumnSearchController } from "./ui/controllers/column-search-controller.js";
 const { state, savedTheme, savedGridFont, savedPanelState } = createInitialAppState({ storage: localStorage });
 const {
@@ -425,6 +426,7 @@ const commandController = createCommandController({
     showSearch: searchController.showSearch,
     showFirstColumnSearch: () => searchController.showSearch({ scope: "row-titles" }),
     showColumnSearch: columnSearchController.showColumnSearch,
+    quickOpenFile: () => quickOpenController.show(),
     findNext: searchController.findNext,
     findPrevious: searchController.findPrevious,
     showReplace: searchController.showReplace,
@@ -553,6 +555,11 @@ skillDupBridge.runFromCommand = (commandId) => skillDupController.runFromCommand
 skillDupBridge.contextMenuEntries = ({ focusRow, doc }) => skillDupController.contextMenuEntries({ focusRow, doc });
 skillDupController.wireEvents();
 columnSearchController.wireEvents();
+const quickOpenController = createQuickOpenController({
+  state, els, openPaths: (paths) => documentController.openDroppedNativePaths(paths),
+  selectTab: (index) => shellController.selectTab(index), focusActiveEditor
+});
+quickOpenController.wireEvents();
 const eventController = createAppEventController({
   state,
   els,

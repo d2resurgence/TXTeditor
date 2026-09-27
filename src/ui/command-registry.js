@@ -19,7 +19,7 @@ export const COMMAND_LABELS_BASE = [
   ["duplicate-skill", "resurgence.duplicateSkill"], ["duplicate-missile", "resurgence.duplicateMissile"], ["save-all", "resurgence.saveAll"],
   ["search-column1", "resurgence.findInFirstColumn"], ["show-column-search", "resurgence.goToColumn"],
   ["reload-file", "resurgence.reload"], ["reload-all", "resurgence.reloadAll"],
-  ["go-to-definition", "menu.goToDefinition"], ["fill-down", "resurgence.fillDown"]
+  ["go-to-definition", "menu.goToDefinition"], ["fill-down", "resurgence.fillDown"], ["quick-open-file", "resurgence.quickOpen"]
 ];
 
 export const DEVELOPMENT_COMMAND_LABELS = [
@@ -102,6 +102,7 @@ const COMMAND_ACTIONS = new Map([
   ["unhide-all", { type: "handler", name: "unhideAll" }],
   ["fill", { type: "execute", name: "fill" }],
   ["fill-down", { type: "execute", name: "fill-down" }],
+  ["quick-open-file", { type: "handler", name: "quickOpenFile" }],
   ["increment-fill", { type: "execute", name: "incrementFill" }],
   ["toggle-freeze-row", { type: "freeze", kind: "row" }],
   ["toggle-freeze-column", { type: "freeze", kind: "column" }],

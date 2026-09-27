@@ -176,6 +176,7 @@ export function createAppEventController({
     if (action === "duplicate-temporary") return prevent(event, () => runCommand("duplicate-temporary"));
     if (action === "go-to-definition") return prevent(event, () => runCommand("go-to-definition"));
     if (action === "fill-down") return prevent(event, () => runCommand("fill-down"));
+    if (action === "quick-open-file") return prevent(event, () => runCommand("quick-open-file"));
     if (action === "zoom-in") return prevent(event, () => runCommand("zoom-in"));
     if (action === "zoom-out") return prevent(event, () => runCommand("zoom-out"));
     if (action === "zoom-reset") return prevent(event, () => runCommand("zoom-reset"));
