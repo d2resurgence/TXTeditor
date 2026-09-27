@@ -52,6 +52,8 @@ export const APP_ELEMENT_IDS = Object.freeze({
   paletteResults: "paletteResults",
   toast: "toast",
   externalChangeBanner: "externalChangeBanner",
+  saveConflictDialog: "saveConflictDialog",
+  saveConflictDialogText: "saveConflictDialogText",
   externalChangeMessage: "externalChangeMessage",
   externalChangeReload: "externalChangeReload",
   externalChangeDismiss: "externalChangeDismiss",

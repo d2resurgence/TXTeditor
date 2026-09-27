@@ -162,6 +162,17 @@
       </div>
     </div>
 
+    <div id="saveConflictDialog" class="modal-backdrop hidden">
+      <div class="modal">
+        <h2>File changed on disk</h2>
+        <p id="saveConflictDialogText"></p>
+        <div class="modal-actions">
+          <button data-save-conflict-choice="overwrite">Overwrite</button>
+          <button data-save-conflict-choice="reload">Reload (discard my changes)</button>
+          <button data-save-conflict-choice="cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
     <div id="externalChangeDialog" class="modal-backdrop hidden">
       <div class="modal">
         <h2 data-i18n="dialog.externalChanged">File changed outside TXTeditor</h2>

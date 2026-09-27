@@ -3,6 +3,7 @@ import {
   acknowledgeExternalChange,
   clearDiskWatchState,
   externalChangeMessage,
+  isSaveOverExternalChange,
   setDiskWatchBaseline,
   shouldNotifyExternalChange
 } from "../external-file-watch-policy.js";
@@ -39,6 +40,14 @@ export function createExternalFileWatchController({
     if (!isTauriRuntime() || !doc?.path) return;
     const [result] = await readFileModifiedTimes([doc.path]);
     if (result?.modified_ms != null) setDiskWatchBaseline(doc, result.modified_ms);
+    // The editor now matches the disk, so a pending banner for this file is stale.
+    if (pendingChange?.doc === doc) hideBanner();
+  }
+
+  async function isSaveConflict(doc) {
+    if (!isTauriRuntime() || !doc?.path) return false;
+    const [result] = await readFileModifiedTimes([doc.path]).catch(() => []);
+    return isSaveOverExternalChange(doc, result?.modified_ms ?? null);
   }
 
   async function syncAllOpenDocuments() {
@@ -124,6 +133,7 @@ export function createExternalFileWatchController({
   return {
     forgetDocument,
     hideBanner,
+    isSaveConflict,
     resolveReloadedDocument,
     start,
     stop,

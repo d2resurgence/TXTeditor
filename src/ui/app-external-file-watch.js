@@ -4,7 +4,8 @@ export function createAppExternalFileWatchBridge({ state, els }) {
   const hooks = {
     syncDocumentBaseline: async () => {},
     forgetDocument: () => {},
-    resolveReloadedDocument: () => {}
+    resolveReloadedDocument: () => {},
+    isSaveConflict: async () => false
   };
 
   function attach(documentController) {
@@ -17,6 +18,7 @@ export function createAppExternalFileWatchBridge({ state, els }) {
     hooks.syncDocumentBaseline = (doc) => controller.syncDocumentBaseline(doc);
     hooks.forgetDocument = (doc) => controller.forgetDocument(doc);
     hooks.resolveReloadedDocument = (doc) => controller.resolveReloadedDocument(doc);
+    hooks.isSaveConflict = (doc) => controller.isSaveConflict(doc);
     controller.start();
   }
 
@@ -24,6 +26,7 @@ export function createAppExternalFileWatchBridge({ state, els }) {
     attach,
     syncExternalFileBaseline: (doc) => hooks.syncDocumentBaseline(doc),
     forgetExternalFileWatch: (doc) => hooks.forgetDocument(doc),
-    resolveExternalFileChangeAfterReload: (doc) => hooks.resolveReloadedDocument(doc)
+    resolveExternalFileChangeAfterReload: (doc) => hooks.resolveReloadedDocument(doc),
+    isExternalSaveConflict: (doc) => hooks.isSaveConflict(doc)
   };
 }

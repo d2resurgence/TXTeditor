@@ -350,7 +350,8 @@ documentController = createDocumentController({
   saveJsonStringViewIfNeeded: (doc) => stringWorkspaceBridge.saveJsonStringViewIfNeeded(doc),
   syncExternalFileBaseline: (doc) => externalFileWatch.syncExternalFileBaseline(doc),
   forgetExternalFileWatch: (doc) => externalFileWatch.forgetExternalFileWatch(doc),
-  resolveExternalFileChangeAfterReload: (doc) => externalFileWatch.resolveExternalFileChangeAfterReload(doc)
+  resolveExternalFileChangeAfterReload: (doc) => externalFileWatch.resolveExternalFileChangeAfterReload(doc),
+  isExternalSaveConflict: (doc) => externalFileWatch.isExternalSaveConflict(doc)
 });
 externalFileWatch.attach(documentController);
 searchController = createSearchController({

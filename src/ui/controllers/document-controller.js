@@ -77,6 +77,7 @@ export function createTemporaryTableDocument(source, name) {
     autoFitInitialColumns: false
   });
 }
+import { saveConflictMessage } from "../external-file-watch-policy.js";
 import {
   applyDocumentViewState,
   canReloadDocument,
@@ -134,6 +135,7 @@ export function createDocumentController({
   syncExternalFileBaseline = async () => {},
   forgetExternalFileWatch = () => {},
   resolveExternalFileChangeAfterReload = () => {},
+  isExternalSaveConflict = async () => false,
   storage = globalThis.localStorage,
   sessionStorage = globalThis.sessionStorage
 }) {
@@ -739,6 +741,14 @@ export function createDocumentController({
     const previousUri = docToUri(doc);
     const previousAnnotationIdentity = isTableDocument(doc) ? captureTableAnnotationIdentity(doc) : "";
     if (isTauriRuntime()) {
+      if (await isExternalSaveConflict(doc)) {
+        const choice = await askSaveConflictChoice(doc);
+        if (choice === "reload") {
+          await reloadDocument(doc, { discardChanges: true });
+          return false;
+        }
+        if (choice !== "overwrite") return false;
+      }
       if (await saveJsonStringViewIfNeeded(doc)) {
         grid.draw();
         renderChrome();
@@ -1060,6 +1070,29 @@ export function createDocumentController({
     return new Promise((resolve) => { pendingExternalResolve = resolve; });
   }
 
+  // Save would overwrite a newer version on disk: Overwrite, Reload (discarding the
+  // editor's changes) or Cancel. The listener is attached on first use.
+  let saveConflictResolve = null;
+  function askSaveConflictChoice(doc) {
+    const dialog = els.saveConflictDialog;
+    if (!dialog || !els.saveConflictDialogText) return Promise.resolve("overwrite");
+    if (!dialog.dataset.bound) {
+      dialog.dataset.bound = "true";
+      dialog.addEventListener("click", (event) => {
+        const choice = event.target.closest?.("[data-save-conflict-choice]")?.dataset.saveConflictChoice;
+        if (!choice || !saveConflictResolve) return;
+        const resolve = saveConflictResolve;
+        saveConflictResolve = null;
+        dialog.classList.add("hidden");
+        resolve(choice);
+      });
+    }
+    activateDocumentTab(doc);
+    els.saveConflictDialogText.textContent = saveConflictMessage(doc);
+    dialog.classList.remove("hidden");
+    return new Promise((resolve) => { saveConflictResolve = resolve; });
+  }
+
   function askCloseChoice(doc) {
     return askDiscardChoice(doc, closeDialogMessage(doc));
   }
@@ -1100,12 +1133,12 @@ export function createDocumentController({
     throw new Error(`Save ${oldDoc.name} before reloading.`);
   }
 
-  async function reloadDocument(oldDoc, { quiet = false } = {}) {
+  async function reloadDocument(oldDoc, { quiet = false, discardChanges = false } = {}) {
     if (!canReloadTable(oldDoc)) {
       if (!quiet) showError(`Save ${oldDoc.name} before reloading.`);
       return false;
     }
-    if (oldDoc.dirty) {
+    if (oldDoc.dirty && !discardChanges) {
       activateDocumentTab(oldDoc);
       const choice = await askReloadChoice(oldDoc);
       if (choice === "save") {
